@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           matrix=$(jq -c '
             [ .[] as $f
-              | .targets[]
+              | $f.targets[]
               | {
                   firmware: $f.id,
                   name: $f.name,
