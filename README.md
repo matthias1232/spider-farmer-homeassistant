@@ -366,7 +366,7 @@ change, immediately:
 Merge binaries and per-target manifests are uploaded as workflow artifacts, so you can
 always flash the current state without a local toolchain.
 
-Locally, ESP-IDF v5.3 is enough:
+Locally, ESP-IDF v5.5 is enough:
 
 ```bash
 cd firmware/ggs
