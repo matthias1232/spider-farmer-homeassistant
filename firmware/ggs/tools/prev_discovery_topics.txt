@@ -1,0 +1,163 @@
+# Every discovery topic that earlier firmware published and the current
+# table no longer does. Read by tools/gen_discovery.py, which subtracts the
+# current table and writes main/ha_discovery_stale.c.
+#
+# This file exists because the stale list used to be maintained by hand in
+# ha_mqtt.c and drifted out of date: eight superseded device pages ("GGS Fan
+# Cycle Mode" and its siblings) survived in Home Assistant because their
+# topics were never listed. Deriving the list by diffing what earlier
+# firmware published against what is published now is the only way it
+# cannot drift again.
+#
+# Union of two generations of superseded topics:
+#   - the 72-topic table of the first firmware
+#   - the per-mode pseudo devices ("Cycle settings", "Schedule settings")
+#     an intermediate build announced under their own device blocks
+homeassistant/number/spiderfarmer_$D_blower_cycle_off_minutes/config
+homeassistant/number/spiderfarmer_$D_blower_cycle_run_minutes/config
+homeassistant/number/spiderfarmer_$D_blower_cycle_times/config
+homeassistant/number/spiderfarmer_$D_blower_schedule_speed_cycle/config
+homeassistant/number/spiderfarmer_$D_blower_schedule_speed_env/config
+homeassistant/number/spiderfarmer_$D_blower_schedule_speed_schedule/config
+homeassistant/number/spiderfarmer_$D_blower_standby_speed_cycle/config
+homeassistant/number/spiderfarmer_$D_blower_standby_speed_env/config
+homeassistant/number/spiderfarmer_$D_blower_standby_speed_schedule/config
+homeassistant/number/spiderfarmer_$D_fan_cycle_off_minutes/config
+homeassistant/number/spiderfarmer_$D_fan_cycle_run_minutes/config
+homeassistant/number/spiderfarmer_$D_fan_cycle_times/config
+homeassistant/number/spiderfarmer_$D_fan_oscillation_level_cycle/config
+homeassistant/number/spiderfarmer_$D_fan_oscillation_level_env/config
+homeassistant/number/spiderfarmer_$D_fan_oscillation_level_ppfd/config
+homeassistant/number/spiderfarmer_$D_fan_oscillation_level_ppfd_env/config
+homeassistant/number/spiderfarmer_$D_fan_oscillation_level_schedule/config
+homeassistant/number/spiderfarmer_$D_fan_schedule_speed_cycle/config
+homeassistant/number/spiderfarmer_$D_fan_schedule_speed_env/config
+homeassistant/number/spiderfarmer_$D_fan_schedule_speed_schedule/config
+homeassistant/number/spiderfarmer_$D_fan_standby_speed_cycle/config
+homeassistant/number/spiderfarmer_$D_fan_standby_speed_env/config
+homeassistant/number/spiderfarmer_$D_fan_standby_speed_schedule/config
+homeassistant/number/spiderfarmer_$D_light_dim_threshold_ppfd/config
+homeassistant/number/spiderfarmer_$D_light_dim_threshold_schedule/config
+homeassistant/number/spiderfarmer_$D_light_fade_minutes_schedule/config
+homeassistant/number/spiderfarmer_$D_light_off_threshold_ppfd/config
+homeassistant/number/spiderfarmer_$D_light_off_threshold_schedule/config
+homeassistant/number/spiderfarmer_$D_light_ppfd_fade_minutes_ppfd/config
+homeassistant/number/spiderfarmer_$D_light_ppfd_max_ppfd/config
+homeassistant/number/spiderfarmer_$D_light_ppfd_min_ppfd/config
+homeassistant/number/spiderfarmer_$D_light_ppfd_target_ppfd/config
+homeassistant/number/spiderfarmer_$D_light_schedule_brightness_schedule/config
+homeassistant/number/spiderfarmer_$D_light2_fade_minutes_schedule/config
+homeassistant/number/spiderfarmer_$D_light2_ppfd_fade_minutes_ppfd/config
+homeassistant/number/spiderfarmer_$D_light2_ppfd_max_ppfd/config
+homeassistant/number/spiderfarmer_$D_light2_ppfd_min_ppfd/config
+homeassistant/number/spiderfarmer_$D_light2_ppfd_target_ppfd/config
+homeassistant/number/spiderfarmer_$D_light2_schedule_brightness_schedule/config
+homeassistant/number/spiderfarmer_$D_target_co2_deadband_schedule/config
+homeassistant/number/spiderfarmer_$D_target_co2_target_day_schedule/config
+homeassistant/number/spiderfarmer_$D_target_co2_target_night_schedule/config
+homeassistant/number/spiderfarmer_$D_target_humi_deadband_schedule/config
+homeassistant/number/spiderfarmer_$D_target_humi_target_day_schedule/config
+homeassistant/number/spiderfarmer_$D_target_humi_target_night_schedule/config
+homeassistant/number/spiderfarmer_$D_target_temp_deadband_schedule/config
+homeassistant/number/spiderfarmer_$D_target_temp_target_day_schedule/config
+homeassistant/number/spiderfarmer_$D_target_temp_target_night_schedule/config
+homeassistant/select/spiderfarmer_$D_blower_cycle_times_env/config
+homeassistant/select/spiderfarmer_$D_blower_cycle_times_schedule/config
+homeassistant/select/spiderfarmer_$D_blower_env_submode_env/config
+homeassistant/select/spiderfarmer_$D_blower_env_submode_schedule/config
+homeassistant/select/spiderfarmer_$D_blower_main_mode_env/config
+homeassistant/select/spiderfarmer_$D_blower_main_mode_schedule/config
+homeassistant/select/spiderfarmer_$D_fan_cycle_times_env/config
+homeassistant/select/spiderfarmer_$D_fan_cycle_times_schedule/config
+homeassistant/select/spiderfarmer_$D_fan_env_submode_env/config
+homeassistant/select/spiderfarmer_$D_fan_env_submode_schedule/config
+homeassistant/select/spiderfarmer_$D_fan_main_mode_env/config
+homeassistant/select/spiderfarmer_$D_fan_main_mode_schedule/config
+homeassistant/switch/spiderfarmer_$D_fan_natural_wind_cycle/config
+homeassistant/switch/spiderfarmer_$D_fan_natural_wind_env/config
+homeassistant/switch/spiderfarmer_$D_fan_natural_wind_schedule/config
+homeassistant/text/spiderfarmer_$D_blower_cycle_off_time_env/config
+homeassistant/text/spiderfarmer_$D_blower_cycle_off_time_schedule/config
+homeassistant/text/spiderfarmer_$D_blower_cycle_run_time_env/config
+homeassistant/text/spiderfarmer_$D_blower_cycle_run_time_schedule/config
+homeassistant/text/spiderfarmer_$D_blower_cycle_start/config
+homeassistant/text/spiderfarmer_$D_blower_schedule_end/config
+homeassistant/text/spiderfarmer_$D_blower_schedule_start/config
+homeassistant/text/spiderfarmer_$D_fan_cycle_off_time_env/config
+homeassistant/text/spiderfarmer_$D_fan_cycle_off_time_schedule/config
+homeassistant/text/spiderfarmer_$D_fan_cycle_run_time_env/config
+homeassistant/text/spiderfarmer_$D_fan_cycle_run_time_schedule/config
+homeassistant/text/spiderfarmer_$D_fan_cycle_start/config
+homeassistant/text/spiderfarmer_$D_fan_schedule_end/config
+homeassistant/text/spiderfarmer_$D_fan_schedule_start/config
+homeassistant/text/spiderfarmer_$D_light_ppfd_end/config
+homeassistant/text/spiderfarmer_$D_light_ppfd_start/config
+homeassistant/text/spiderfarmer_$D_light_schedule_end/config
+homeassistant/text/spiderfarmer_$D_light_schedule_start/config
+homeassistant/time/spiderfarmer_$D_blower_cycle_start_env/config
+homeassistant/time/spiderfarmer_$D_blower_cycle_start_schedule/config
+homeassistant/time/spiderfarmer_$D_blower_schedule_end_schedule/config
+homeassistant/time/spiderfarmer_$D_blower_schedule_start_schedule/config
+homeassistant/time/spiderfarmer_$D_fan_cycle_start_env/config
+homeassistant/time/spiderfarmer_$D_fan_cycle_start_schedule/config
+homeassistant/time/spiderfarmer_$D_fan_schedule_end_schedule/config
+homeassistant/time/spiderfarmer_$D_fan_schedule_start_schedule/config
+homeassistant/time/spiderfarmer_$D_light_ppfd_end_ppfd/config
+homeassistant/time/spiderfarmer_$D_light_ppfd_start_ppfd/config
+homeassistant/time/spiderfarmer_$D_light_schedule_end_schedule/config
+homeassistant/time/spiderfarmer_$D_light_schedule_start_schedule/config
+homeassistant/time/spiderfarmer_$D_light2_ppfd_end_ppfd/config
+homeassistant/time/spiderfarmer_$D_light2_ppfd_start_ppfd/config
+homeassistant/time/spiderfarmer_$D_light2_schedule_end_schedule/config
+homeassistant/time/spiderfarmer_$D_light2_schedule_start_schedule/config
+homeassistant/time/spiderfarmer_$D_target_day_time_end_schedule/config
+homeassistant/time/spiderfarmer_$D_target_day_time_start_schedule/config
+
+# Topics of the very first firmware generation, which used different
+# naming than every later one: the fan entity kept its own uid and the two
+# fade-minute numbers were plain entries, not per-mode ones. Any retained
+# config left under these keeps a device alive that no longer exists.
+homeassistant/fan/$D_fan/config
+homeassistant/fan/$D_blower/config
+homeassistant/number/spiderfarmer_$D_light_fade_minutes/config
+homeassistant/number/spiderfarmer_$D_light_ppfd_fade_minutes/config
+
+# Same entities under the component they had before they became selects
+# and time pickers. A unique_id may only exist once per component, but the
+# old number/text configs stayed retained next to the new ones.
+
+homeassistant/number/spiderfarmer_$D_blower_schedule_speed/config
+homeassistant/number/spiderfarmer_$D_blower_standby_speed/config
+homeassistant/number/spiderfarmer_$D_fan_oscillation_level/config
+homeassistant/number/spiderfarmer_$D_fan_schedule_speed/config
+homeassistant/number/spiderfarmer_$D_fan_standby_speed/config
+homeassistant/number/spiderfarmer_$D_light2_dim_threshold/config
+homeassistant/number/spiderfarmer_$D_light2_fade_minutes/config
+homeassistant/number/spiderfarmer_$D_light2_off_threshold/config
+homeassistant/number/spiderfarmer_$D_light2_ppfd_fade_minutes/config
+homeassistant/number/spiderfarmer_$D_light_dim_threshold/config
+homeassistant/number/spiderfarmer_$D_light_off_threshold/config
+homeassistant/text/spiderfarmer_$D_blower_cycle_off_time/config
+homeassistant/text/spiderfarmer_$D_blower_cycle_run_time/config
+homeassistant/text/spiderfarmer_$D_fan_cycle_off_time/config
+homeassistant/text/spiderfarmer_$D_fan_cycle_run_time/config
+
+# The two-step mode picker, replaced by one combined mode select.
+homeassistant/select/spiderfarmer_$D_fan_main_mode/config
+homeassistant/select/spiderfarmer_$D_fan_env_submode/config
+homeassistant/select/spiderfarmer_$D_blower_main_mode/config
+homeassistant/select/spiderfarmer_$D_blower_env_submode/config
+
+# Sensor cleaning, announced under its wire name before it was renamed.
+homeassistant/switch/spiderfarmer_$D_sensor_heating/config
+homeassistant/button/spiderfarmer_$D_plan_template_seedling/config
+homeassistant/button/spiderfarmer_$D_plan_template_clone/config
+homeassistant/button/spiderfarmer_$D_plan_template_veg/config
+homeassistant/button/spiderfarmer_$D_plan_template_flower/config
+homeassistant/button/spiderfarmer_$D_plan_template_dry/config
+homeassistant/button/spiderfarmer_$D_plan_template_custom/config
+
+# Oscillation switch + level select, replaced by the "Fan Oscillation" fan
+# entity (on/off with a 10-step slider).
+homeassistant/switch/spiderfarmer_$D_fan_oscillation/config
+homeassistant/select/spiderfarmer_$D_fan_oscillation_level/config

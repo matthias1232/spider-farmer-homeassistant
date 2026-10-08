@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SpiderBridge — Installer</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:system-ui,sans-serif;max-width:40rem;margin:0 auto;padding:1.2rem;
+       background:#13151a;color:#e6e6e6;line-height:1.45}
+  h1{font-size:1.4rem;margin:.2rem 0}
+  p.sub{color:#9aa0aa;font-size:.9rem;margin:.2rem 0 1.2rem}
+  .card{border:1px solid #2c303a;border-radius:.6rem;background:#1a1d24;
+        padding:1rem 1.1rem;margin:0 0 1.1rem}
+  .card h2{font-size:1rem;margin:0 0 .6rem;color:#8ab4f8}
+  a{color:#8ab4f8}
+  small,.muted{color:#7d848f;font-size:.8rem}
+  code{background:#0f1116;border:1px solid #2c303a;border-radius:.25rem;
+       padding:.05rem .3rem;font-size:.85em}
+  ol{padding-left:1.2rem;margin:.4rem 0}
+  li{margin:.35rem 0}
+  .footer{margin-top:1.5rem;padding-top:.8rem;border-top:1px solid #2c303a;
+          font-size:.85rem;color:#9aa0aa}
+  .btn{display:inline-block;background:#8ab4f8;color:#13151a;font-weight:600;
+       padding:.5rem .9rem;border-radius:.3rem;text-decoration:none;margin:.2rem .4rem .2rem 0}
+  .btn.ghost{background:transparent;color:#8ab4f8;border:1px solid #8ab4f8}
+  esp-web-install-button::part(button){width:100%}
+</style>
+<script type="module" src="https://unpkg.com/esp-web-tools@10.0.3/dist/web/install-button.js"></script>
+<script type="module" src="https://unpkg.com/improv-wifi-serial-sdk@2/dist/web/serial-launch-button.js"></script>
+</head>
+<body>
+
+<h1>🕷 SpiderBridge</h1>
+<p class="sub">Spider Farmer GGS controller ⇄ Home Assistant. Everything the app can do,
+1:1 in Home Assistant — no app, no cloud, installation and operation entirely without them.</p>
+
+<div class="card">
+  <h2>1 · Flash the firmware</h2>
+  <p>Connect the ESP32 board by USB (hold <strong>BOOT</strong> if the port does not appear),
+  choose the serial port and click install. The firmware targets
+  <strong>ESP32-WROOM-32 (4 MB)</strong> — developed and tested with
+  <a href="https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl" target="_blank" rel="noopener">this board</a>.</p>
+  <esp-web-install-button id="installBtn"></esp-web-install-button>
+  <p><small>The installer always uses the newest build of this repository.
+  Alternatively join the hotspot <code>SpiderBridge</code> (password
+  <code>12345678</code>, <code>http://192.168.10.1</code>) and configure Wi-Fi manually.</small></p>
+</div>
+
+<div class="card">
+  <h2>2 · Send Wi-Fi credentials (during installation)</h2>
+  <p>Immediately after flashing, the ESP32 stays in provisioning mode for
+  <strong>5 minutes</strong>. Keep this tab open, enter your home Wi-Fi below and click
+  <strong>Connect</strong> — the credentials are sent to the ESP32 over the serial port
+  (Improv Serial, no cables swapped, no browser extensions).</p>
+  <improv-wifi-launch-button id="improvBtn"></improv-wifi-launch-button>
+  <p><small>If the port disappears after flashing, close and reopen it — the Improv
+  dialog needs the serial port itself. Without this step the bridge creates its own
+  hotspot (<code>SpiderBridge</code>, password <code>12345678</code>) and you can
+  configure Wi-Fi at <code>http://192.168.10.1</code>.</small></p>
+</div>
+
+<div class="card">
+  <h2>3 · What happens next</h2>
+  <ol>
+    <li>The bridge joins your network — open its web interface
+        (hostname <code>spiderbridge.local</code> or its IP from your router).</li>
+    <li>Enter your MQTT broker (Settings → MQTT).</li>
+    <li>Pair the GGS controller over Bluetooth (Control → Bluetooth scan, or the
+        <em>Pair Bluetooth</em> button in Home Assistant).</li>
+    <li>Home Assistant discovers ~154 entities automatically — done. No app, no cloud.</li>
+  </ol>
+  <p><a class="btn" href="../demo/" target="_blank" rel="noopener">See the interface (live demo)</a>
+     <a class="btn ghost" href="https://github.com/matthias1232/spider-farmer-homeassistant#installation" target="_blank" rel="noopener">Full instructions</a></p>
+</div>
+
+<div class="card">
+  <h2>Support</h2>
+  <p>This is a private freetime project. A donation is completely voluntary:
+     <a href="https://www.paypal.com/paypalme/matthias1232" target="_blank" rel="noopener"><strong>Donate via PayPal</strong></a>.</p>
+  <p>Hardware still missing? The board the firmware was developed and tested with:
+     <a href="https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl" target="_blank" rel="noopener">QIQIAZI ESP32 NodeMCU (Amazon)</a>.</p>
+</div>
+
+<div class="footer">
+  SpiderBridge · GPL-3.0-or-later ·
+  <a href="https://github.com/matthias1232/spider-farmer-homeassistant">Repository</a> ·
+  Built with ESP Web Tools &amp; the Improv Serial SDK
+</div>
+
+<script>
+  // Manifest always sits next to this page's parent directory (the site root).
+  var base = location.pathname.replace(/installer\/?$/, '');
+  var manifest = new URL('manifest-ggs-esp32.json', location.origin + base).href;
+  document.getElementById('installBtn').setAttribute('manifest', manifest);
+</script>
+
+</body>
+</html>

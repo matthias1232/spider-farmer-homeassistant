@@ -1,0 +1,258 @@
+# ESP32-WROOM-32, 4 MB flash, no PSRAM.
+#
+# Every value here was forced by something that actually failed during
+# development of the previous version. See main/*.c for the matching
+# comments at the point where each fix applies.
+
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+
+# --- FreeRTOS stack diagnostics ---
+# uxTaskGetSystemState() only exists when the trace facility is compiled in,
+# so the watchdog that reports a stalled poll cannot link without it. This
+# is the only reason it is on: nothing else in the firmware reads it, and
+# the cost is a few hundred bytes of task bookkeeping per task.
+#
+# The high-water marks are the point. A relay task whose stack is too small
+# corrupts its own memory, and no reboot clears that -- a warm restart runs
+# the same code on the same undersized stack -- so it looks like a device
+# that simply stops answering.
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+
+# --- Wi-Fi ---
+# CONFIG_ESP32_WIFI_* is the old Xtensa-only prefix and does not exist on
+# every IDF-5 target; CONFIG_ESP_WIFI_* is the portable one.
+CONFIG_ESP_WIFI_STA_DISCONNECTED_PM_ENABLE=n
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=y
+
+# --- NAT routing for the cloud mirror ---
+# Required because the controller's traffic to the real Spider Farmer
+# cloud goes out through the bridge's own uplink.
+CONFIG_LWIP_IPV4_NAPT=y
+CONFIG_LWIP_IP_FORWARD=y
+
+# Default of 10 is too tight once the web server, the DNS proxy, the MQTT
+# client and two TLS sockets per controller session are all open at once.
+# Running out shows up as accept() failing with ENFILE, which silently
+# stops the proxy from accepting any further connections.
+CONFIG_LWIP_MAX_SOCKETS=16
+
+# --- Buffers for routed traffic ---
+# With NAT enabled, hotspot traffic and the bridge's own uplink traffic
+# both pass through this stack, so the defaults are far too small.
+#
+# The visible symptom of undersized buffers is distinctive: connections
+# establish and small requests succeed, then larger transfers stall
+# part-way through. Packets are dropped when a mailbox is full, TCP
+# retransmits, and throughput collapses. Web pages "start loading and
+# then hang".
+#
+# Scaled back down in 1.13: the only hotspot client is the controller,
+# whose traffic is a few hundred bytes every few seconds. The throughput
+# tuning below held ~40 KB of RAM permanently and grabbed tens of KB more
+# in bursts -- on a board without PSRAM that starved the TLS sessions and
+# the web server (pages hanging, requests shed, sessions refused).
+CONFIG_LWIP_TCP_RECVMBOX_SIZE=12
+CONFIG_LWIP_UDP_RECVMBOX_SIZE=8
+CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=32
+
+# Larger TCP windows so a single transfer is not limited to tiny bursts.
+#
+# AP and STA share one radio, so every routed packet crosses the same
+# channel twice: once from the client, once onwards to the router. That
+# doubles the effective round-trip time, and a small window then caps
+# throughput regardless of how good the link looks. Measured on hardware:
+# 72 MBit/s link rate but only 0.7 MBit/s of actual transfer.
+# 1.13: 4 x MSS. Each open socket could buffer up to the window in pbufs.
+CONFIG_LWIP_TCP_WND_DEFAULT=5744
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=5744
+
+# Selective acknowledgements. On a shared channel a single lost packet
+# otherwise forces everything after it to be retransmitted, which is what
+# turns a brief interruption into a long stall.
+CONFIG_LWIP_TCP_SACK_OUT=y
+
+# More queued segments, matching the larger window.
+CONFIG_LWIP_TCP_QUEUE_OOSEQ=y
+CONFIG_LWIP_TCP_OOSEQ_MAX_PBUFS=4
+
+# Wi-Fi buffers. Each static RX buffer is 1.6 KB of permanent RAM: 24 of
+# them were ~38 KB. 10 is the IDF default and plenty for one controller.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=10
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=24
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=24
+CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=y
+CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=y
+
+# Aggregation window: an RX window holds that many buffers per peer.
+CONFIG_ESP_WIFI_TX_BA_WIN=6
+CONFIG_ESP_WIFI_RX_BA_WIN=6
+
+# Run the Wi-Fi task on the second core, away from the TLS work. On a
+# single core the mbedTLS encryption for two sessions and the packet
+# forwarding compete for the same CPU.
+CONFIG_ESP_WIFI_TASK_PINNED_TO_CORE_1=y
+
+# --- mbedTLS ---
+# No PSRAM on this board. Buffers are allocated only while a handshake is
+# in progress instead of being held permanently.
+# TLS 1.3, both as server and as client.
+#
+# The real Spider Farmer cloud negotiates TLS 1.3 (TLS_AES_256_GCM_SHA384).
+# With only TLS 1.2 compiled in, the controller opened a TCP connection,
+# started the handshake and then closed it without sending an alert —
+# eighteen times in ninety seconds. The certificate was never the problem:
+# it is byte-identical to the one the real cloud presents.
+#
+# MBEDTLS_DYNAMIC_BUFFER has to stay off: ESP-IDF does not support it
+# together with TLS 1.3 (see the note above the option in
+# components/mbedtls/Kconfig). That costs roughly 8 KB of permanently
+# allocated buffer per session instead of transient allocation. Measured
+# headroom allows it: 183 KB free with two sessions running.
+CONFIG_MBEDTLS_SSL_PROTO_TLS1_3=y
+CONFIG_MBEDTLS_SSL_TLS1_3_COMPATIBILITY_MODE=y
+CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE=y
+
+# IN 6144 (1.15): the controller and the cloud send a whole grow plan as one
+# TLS record -- ~5.3 KB with five stages. With 2048 a third stage made the
+# read fail and ended the session in a loop. OUT stays 1024: mbedTLS splits
+# outgoing data into records itself.
+CONFIG_MBEDTLS_SSL_MAX_CONTENT_LEN=6144
+CONFIG_MBEDTLS_ASYMMETRIC_CONTENT_LEN=y
+CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=6144
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=1024
+CONFIG_MBEDTLS_CLIENT_SSL_SESSION_TICKETS=n
+CONFIG_MBEDTLS_SERVER_SSL_SESSION_TICKETS=n
+CONFIG_MBEDTLS_SSL_RENEGOTIATION=n
+CONFIG_MBEDTLS_KEY_EXCHANGE_RSA=y
+CONFIG_MBEDTLS_KEY_EXCHANGE_ECDHE_RSA=y
+CONFIG_MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA=n
+CONFIG_MBEDTLS_KEY_EXCHANGE_PSK=n
+CONFIG_MBEDTLS_KEY_EXCHANGE_DHE_RSA=n
+
+# --- Unverified TLS, only where the user asks for it ---
+#
+# The broker and the syslog server both offer "accept any certificate" for
+# home servers with self-signed certificates. esp-tls refuses a connection
+# with no CA to check against unless these are enabled; whether a given
+# connection actually skips verification is still decided per connection
+# by that setting.
+CONFIG_ESP_TLS_INSECURE=y
+CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY=y
+
+# --- Bluetooth LE for GGS setup (NimBLE, central only) ---
+#
+# Used on demand to find Spider Farmer GGS controllers and hand them the
+# hotspot's Wi-Fi credentials. The controller stack is started for a scan
+# or a setup and released again afterwards (esp_bt_controller_mem_release
+# is NOT called, so it can be started again), keeping its RAM free for the
+# TLS sessions the rest of the time. Central role only: the bridge never
+# advertises or accepts connections.
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=n
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=n
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+CONFIG_BT_NIMBLE_MAX_BONDS=1
+CONFIG_BT_NIMBLE_SECURITY_ENABLE=n
+CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
+CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN=31
+# CA bundle: only the TLS syslog client without a custom CA uses it. The
+# full bundle is ~70 KB of flash; "common" keeps the widely used roots
+# (Let's Encrypt, DigiCert, GlobalSign, ...) in ~25 KB.
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN=y
+
+# The GGS sends each status/reply frame (up to 422 bytes) as ONE
+# notification and sends nothing at all when the MTU is smaller -- with 256
+# the bridge received zero notifications. 517 = maximum; the GGS accepts 500.
+CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=517
+CONFIG_BTDM_CTRL_MODE_BLE_ONLY=y
+# Buffers are allocated by nimble_port_init(), i.e. only in the
+# Bluetooth-only boot, so they cost no memory in normal operation.
+CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=12
+CONFIG_BT_NIMBLE_MSYS_2_BLOCK_COUNT=8
+CONFIG_BT_NIMBLE_TRANSPORT_ACL_FROM_LL_COUNT=12
+CONFIG_BT_NIMBLE_TRANSPORT_EVT_COUNT=10
+CONFIG_BT_NIMBLE_TRANSPORT_EVT_DISCARD_COUNT=4
+CONFIG_BT_NIMBLE_GATT_MAX_PROCS=2
+# Replies are decrypted and parsed (cJSON) in the host task's callbacks;
+# 3 KB overflowed on a getSysSta reply. Only allocated in the Bluetooth boot.
+CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=6144
+CONFIG_BTDM_CTRL_BLE_MAX_CONN=1
+CONFIG_BT_NIMBLE_WHITELIST_SIZE=1
+CONFIG_BT_NIMBLE_ENABLE_CONN_REATTEMPT=n
+CONFIG_BT_NIMBLE_50_FEATURE_SUPPORT=n
+
+# Smaller code: the image was 1.44 of 1.5 MB before Bluetooth. -Os keeps
+# behaviour identical and leaves room for the NimBLE host.
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# --- Unused features, off to save RAM ---
+# (Bluetooth is enabled above for the GGS setup; its stack only runs while
+# a scan or a setup is in progress.)
+CONFIG_SPIRAM=n
+
+# --- Automatic recovery from a hang ---
+#
+# A genuine crash already reboots on its own
+# (CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT is the IDF default). A *hang* did
+# not: the task watchdog was set to log a warning and carry on, so a task
+# stuck in a loop or blocked forever left the device wedged until someone
+# pulled the power — which happened repeatedly during development, more
+# than once needing a serial reflash to recover.
+#
+# TASK_WDT_PANIC turns that warning into a panic, which then takes the
+# normal reboot path. Combined with the OTA rollback below, the device
+# can now recover from both failure modes without physical access.
+#
+# The timeout stays at the IDF default of 5 s. That is comfortably longer
+# than any legitimate operation here: the TLS handshake and the OTA write
+# loop both yield regularly, and the HTTP handlers are chunked.
+CONFIG_ESP_TASK_WDT_PANIC=y
+
+# --- OTA rollback safety ---
+#
+# Without this, a flashed image that boots into a hang or crash loop has
+# no automatic way back: esp_ota_set_boot_partition() switches
+# permanently on the first flash, and a device that cannot reach the web
+# server to accept a corrective OTA is then unreachable until a serial
+# reflash. Given this firmware has already been seen to hang badly
+# enough to need a power cycle, from causes unrelated to the image
+# itself, an OTA that happens to land during or shortly after one of
+# those cannot be allowed to become permanent without the new firmware
+# proving it can actually run first.
+#
+# APP_ROLLBACK_ENABLE turns on the bootloader-level support. The
+# corresponding call that marks a boot "good" —
+# esp_ota_mark_app_valid_cancel_rollback() — is in app_main.c, after the
+# web server is confirmed listening; if that confirmation is never
+# reached (crash, hang, watchdog reset) within
+# CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE's retry count, the bootloader
+# reverts to the previous partition on its own, with no action needed
+# from the network side at all.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# --- HTTP server limits ---
+# The default 512-byte header block is smaller than what a browser sends
+# once it includes a Referer and the Sec-Fetch headers, and the failure
+# is opaque: "Header fields are too long", with the settings form simply
+# refusing to save.
+# 1024 (1.15): a browser's headers are ~600-900 bytes; 2048 cost 1 KB of
+# permanent scratch buffer.
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+CONFIG_HTTPD_MAX_URI_LEN=1024
+
+# --- Task stacks ---
+# The configuration struct is close to a kilobyte, and startup keeps one
+# alive while calling into the Wi-Fi driver, which needs its own depth.
+# At 4 KB this overflowed during wifi_apsta_init and the device rebooted
+# before the web server started: "A stack overflow in task main has been
+# detected". The struct was moved to the heap as well, so this is
+# headroom rather than the fix.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192

@@ -1,0 +1,65 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SpiderBridge</title><style>*{box-sizing:border-box}body{font-family:system-ui,sans-serif;max-width:32rem;margin:0 auto;padding:1rem;background:#13151a;color:#e6e6e6}h1{font-size:1.3rem;margin:0 0 .2rem}p.sub{margin:0 0 1rem;color:#9aa0aa;font-size:.85rem}label{display:block;margin:.7rem 0 .2rem;font-size:.85rem;color:#c3c8d0}input[type=text],input[type=password],input[type=number]{width:100%;padding:.5rem;background:#0f1116;color:#e6e6e6;border:1px solid #333845;border-radius:.3rem}input[type=radio],input[type=checkbox]{width:auto;margin-right:.4rem}button{width:100%;padding:.7rem;margin-top:1.2rem;background:#8ab4f8;color:#13151a;font-weight:600;border:0;border-radius:.3rem;font-size:1rem;cursor:pointer}fieldset{border:1px solid #2c303a;border-radius:.4rem;margin:1rem 0;padding:.8rem;background:#1a1d24}legend{color:#8ab4f8;font-size:.9rem;padding:0 .4rem}a{color:#8ab4f8;text-decoration:none}small{display:block;margin-top:.25rem;color:#7d848f;font-size:.78rem}.info{margin-top:.8rem;padding:.5rem .7rem;background:#0f1116;border-radius:.35rem;font-size:.8rem;color:#7d848f}.sw{position:relative;display:inline-block;width:2.4rem;height:1.3rem;flex:none}.sw input{opacity:0;width:0;height:0}.sw span{position:absolute;inset:0;background:#333845;border-radius:1rem;cursor:pointer;transition:.15s}.sw span:before{content:'';position:absolute;width:1rem;height:1rem;left:.15rem;top:.15rem;background:#9aa0aa;border-radius:50%;transition:.15s}.sw input:checked+span{background:#8ab4f8}.sw input:checked+span:before{transform:translateX(1.1rem);background:#fff}.sw input:disabled+span{opacity:.4;cursor:not-allowed}.swrow{display:flex;gap:.6rem;align-items:center;margin:.3rem 0}label.inline{display:flex;gap:.5rem;align-items:center;margin-top:.5rem;font-weight:400}label.inline input{width:auto;margin:0}
+<div class="topnav"><span class="brand">SpiderBridge</span><a href="index.html" class="cur">Settings</a><a href="control/">Control</a><a href="status/">Status</a><a href="network/">Network</a><a href="log/">MQTT log</a><a href="update/">Firmware</a></div>
+</style></head><body>
+<div id="sbdemo" style="background:#fbbf24;color:#13151a;font:600 .8rem system-ui;
+padding:.45rem .8rem;text-align:center">
+  DEMO — all data here is simulated. This is the real bridge interface, rendered offline with
+  <a href="https://github.com/matthias1232/spider-farmer-homeassistant">SpiderBridge</a>'s
+  faker. Built and tested with this
+  <a href="https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl">ESP32 board</a>
+  · <a href="https://www.paypal.com/paypalme/matthias1232">Donate</a>
+</div>
+
+<h1>SpiderBridge Settings</h1>
+<form method="POST" action="/save" onsubmit="return demoSave(event)">
+<input type=hidden name="form" value="full">
+<fieldset><legend>Networking — home Wi-Fi</legend>
+<label>Network name (SSID)</label><input type=text name="sta_ssid" placeholder="MyHomeWiFi">
+<label>Password</label><input type=password name="sta_pass" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
+<small>The bridge uses this network to reach your MQTT broker and Home Assistant.</small>
+</fieldset>
+<fieldset><legend>Hotspot (setup network)</legend>
+<label>Hotspot name</label><input type=text name="ap_ssid" value="SpiderBridge">
+<label>Hotspot password</label><input type=password name="ap_pass" value="12345678">
+<small>Change the hotspot password, or generate a new one. Default after install:
+<code>12345678</code> at <code>192.168.10.1</code>.</small>
+<label class=inline><input type=checkbox name="ap_gen"> Generate a new password</label>
+</fieldset>
+<fieldset><legend>MQTT broker</legend>
+<label>Broker</label><input type=text name="mqtt_uri" value="mqtt://homeassistant.local:1883">
+<label>User (optional)</label><input type=text name="mqtt_user">
+<label>Password (optional)</label><input type=password name="mqtt_pass">
+</fieldset>
+<fieldset><legend>Controller — Bluetooth</legend>
+<label class=inline><input type=checkbox checked> Bridge as a Wi-Fi hotspot for the controller</label>
+<label class=inline><input type=checkbox name="wan_block"> Cut the controller's own internet access</label>
+<small>Scan, connect and unpair controllers under <em>Control → Bluetooth</em>.</small>
+</fieldset>
+<fieldset><legend>Time</legend>
+<label>Time zone</label>
+<select name="tz">
+  <option>Europe/Berlin</option><option>Europe/London</option>
+  <option>America/New_York</option><option>UTC</option>
+</select>
+<label class=inline><input type=checkbox name="dst_auto" checked> Daylight saving by zone rules</label>
+<label class=inline><input type=checkbox name="tz_push" checked> Push these time settings to every controller</label>
+</fieldset>
+<button type=submit>Save</button>
+</form>
+<div class=info>Demo mode: the form is not submitted anywhere — the real interface saves
+to the bridge's configuration and reboots the connection.</div>
+<script>
+async function demoSave(ev){
+  ev.preventDefault();
+  const data = new FormData(ev.target);
+  const body = new URLSearchParams(data).toString();
+  try{
+    const r = await fetch('/save',{method:'POST',headers:{
+      'Content-Type':'application/x-www-form-urlencoded'},body:body});
+    alert(r.ok ? 'Saved (demo)' : 'Save failed (demo)');
+  }catch(e){ alert('Saved (demo)'); }
+  return false;
+}
+</script>
+
+<script src="faker.js"></script></body></html>

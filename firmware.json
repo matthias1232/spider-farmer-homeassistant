@@ -1,0 +1,11 @@
+[
+  {
+    "id": "ggs",
+    "name": "Spider Farmer GGS Controller",
+    "dir": "firmware/ggs",
+    "targets": ["esp32"],
+    "project_name": "spiderbridge_esp32_v2",
+    "board": "ESP32-WROOM-32 (e.g. QIQIAZI NodeMCU ESP32, 4 MB)",
+    "flash": {"mode": "dio", "size": "4MB"}
+  }
+]
