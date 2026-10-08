@@ -316,7 +316,7 @@ void prov_set_dst_mode(int mode)
 
 static char s_bridge_name[33] = "";
 
-// "SpiderBridge 5E823D": the last three bytes of the bridge's hotspot MAC,
+// "SpiderBridge A1B2C3": the last three bytes of the bridge's hotspot MAC,
 // so several bridges in one Home Assistant stay apart without naming them.
 void prov_default_bridge_name(char *out, size_t n)
 {

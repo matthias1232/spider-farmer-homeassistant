@@ -13,8 +13,8 @@
 //   IPF_BLOCKLIST  any address except the listed ones
 //   IPF_ALLOWLIST  only the listed ones
 //
-// Rules are CIDR, so "192.168.56.0/24" covers a whole subnet and
-// "192.168.56.5/32" a single machine.
+// Rules are CIDR, so "192.168.10.0/24" covers a whole subnet and
+// "192.168.10.5/32" a single machine.
 //
 // One rule overrides everything: clients on the bridge's own hotspot are
 // always allowed, whatever the list says. Without that, a typo in an

@@ -182,7 +182,7 @@ void prov_set_dst_mode(int mode);
 const char *prov_bridge_name(void);
 void prov_set_bridge_name(const char *name);   // "" = back to the default
 
-// Default bridge name, "SpiderBridge 5E823D" (end of the hotspot MAC).
+// Default bridge name, "SpiderBridge A1B2C3" (end of the hotspot MAC).
 void prov_default_bridge_name(char *out, size_t n);
 
 // True when the bridge uses its default name (nothing set by the user).

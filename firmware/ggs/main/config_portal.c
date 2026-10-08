@@ -1673,7 +1673,7 @@ static esp_err_t save_post_handler(httpd_req_t *req)
 //                 a=connect&addr=..    send the hotspot's Wi-Fi to that GGS
 // ---------------------------------------------------------------------------
 
-// The hotspot client with this Wi-Fi MAC ("D0CF137A60B8"), if any.
+// The hotspot client with this Wi-Fi MAC ("A1B2C3D4E5F6"), if any.
 // Returns 0 = not on the hotspot, 1 = associated but no address (the
 // password does not match: the handshake fails before DHCP), 2 = connected
 // with an address (copied to ip).
@@ -1696,7 +1696,7 @@ static int hotspot_client(const char *wifi_mac, char *ip, size_t ipsz)
     return 0;
 }
 
-// The reverse: Wi-Fi MAC "D0CF137A60B8" -> Bluetooth "D0:CF:13:7A:60:BA".
+// The reverse: Wi-Fi MAC "A1B2C3D4E5F6" -> Bluetooth "A1:B2:C3:D4:E5:F6".
 static bool ble_from_wifi_mac(const char *mac, char *out, size_t outsz)
 {
     if (!mac || strlen(mac) != 12) return false;

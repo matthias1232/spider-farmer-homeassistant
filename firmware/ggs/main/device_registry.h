@@ -32,7 +32,7 @@
 
 typedef struct {
     bool in_use;
-    char mac[DEV_MAC_LEN];     // "D0CF137A60B8", as it appears in the topic
+    char mac[DEV_MAC_LEN];     // "A1B2C3D4E5F6", as it appears in the topic
     char slug[DEV_SLUG_LEN];   // topic and entity id component
     char name[DEV_NAME_LEN];   // human readable label
     bool discovery_sent;       // discovery published under the current slug
@@ -107,8 +107,8 @@ device_entry_t *device_registry_at(int index);
 // Returns false when the slug collides with another device.
 bool device_registry_rename(const char *mac, const char *slug, const char *name);
 
-// Name and topic used when none is set: "GGS D0CF137A60B8" and
-// "ggs_d0cf137a60b8".
+// Name and topic used when none is set: "GGS A1B2C3D4E5F6" and
+// "ggs_a1b2c3d4e5f6".
 void device_registry_default_name(const char *mac, char *out, size_t n);
 void device_registry_default_slug(const char *mac, char *out, size_t n);
 

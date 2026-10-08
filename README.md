@@ -109,6 +109,24 @@ Additionally required:
 - Syslog forwarding to an external server
 - MAC/IP filter for hotspot clients and web access rules
 
+## Web interface (try it live)
+
+The web interface runs entirely on the bridge — six pages, all of them in the
+**[live demo](https://matthias1232.github.io/spider-farmer-homeassistant/demo/)**:
+
+| Page | What it does |
+| --- | --- |
+| **Settings** | Home Wi-Fi, static IP, hotspot, Bluetooth provisioning, MQTT broker, syslog/TLS, what to publish, NAT, DNS/NTP, clock, backup/restore, factory reset |
+| **Control** | Every controller: lights, fans, climate accessories, outlets, day/night targets, calibration, alarms, plans and templates — the complete app feature set |
+| **Status** | Wi-Fi, hotspot, WAN, MQTT, syslog, devices, clock, firmware, memory, stack, BLE |
+| **Network** | Hotspot clients, MAC and IP filter |
+| **MQTT log** | Live up/down/discovery traffic |
+| **Firmware** | Running version, URL update check, `.bin` upload, restart |
+
+The demo is the **real interface, 1:1**, rendered offline from this repository
+(`scripts/extract_gui.py`) with all data replaced by random demo values — no
+personal data, and nothing you click is stored anywhere.
+
 ## Installation
 
 Three steps, no app and no cloud involved.

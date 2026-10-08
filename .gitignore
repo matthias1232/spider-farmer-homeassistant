@@ -27,3 +27,6 @@ Thumbs.db
 
 # Demo build artifacts
 /demo/dist/
+
+# Local list of values that must never be captured into the demo
+scripts/private_values.txt

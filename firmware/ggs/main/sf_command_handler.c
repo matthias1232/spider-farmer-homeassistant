@@ -198,7 +198,7 @@ static cJSON *build_command_flat(const char *mac, const char *uid,
 // The sensor-cleaning cycle is setSensorHeating with params {"on":0|1} and
 // nothing else -- no keyPath, no device block. Captured from the vendor app:
 //   {"method":"setSensorHeating","params":{"on":1},"msgId":...,
-//    "pid":"D0CF137A60B8","uid":"162606"}
+//    "pid":"A1B2C3D4E5F6","uid":"162606"}
 // The msgId is milliseconds since the epoch plus a short suffix, not the
 // esp_timer stamp the config writes use.
 static cJSON *build_command_heating(const char *mac, const char *uid, int on)

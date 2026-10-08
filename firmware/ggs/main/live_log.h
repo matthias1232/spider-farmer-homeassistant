@@ -29,7 +29,7 @@ typedef struct {
     uint8_t  dir;
     uint8_t  packet_type;                // MQTT control packet type
     // 64, measured rather than guessed: the controller topics are short
-    // ("SF/GGS/CB/API/DOWN/D0CF137A60B8", 31 chars) but the Home
+    // ("SF/GGS/CB/API/DOWN/A1B2C3D4E5F6", 31 chars) but the Home
     // Assistant side is not — "spiderfarmer/zelt_links/command/
     // calibration/temp/set" is 52 and grows with the device name.
     // 48 was tried first and would have silently truncated those,

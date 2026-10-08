@@ -10,7 +10,7 @@
 //   * Leases    — which client currently holds which address. Read from
 //                 the DHCP server, enriched with a name you assigned.
 //   * Names     — a label per MAC, so the client list shows "grow
-//                 controller" instead of a bare D0:CF:13:7A:60:B8.
+//                 controller" instead of a bare A1:B2:C3:D4:E5:F6.
 //
 // Reservations are handled by name plus a fixed address: the bridge's
 // DHCP server hands out addresses from a pool, and a reserved client is

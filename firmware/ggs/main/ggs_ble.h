@@ -36,11 +36,11 @@
 #define GGS_FLAG_MQTT   0x08   // cloud (MQTT) session up -- via the bridge here
 
 typedef struct {
-    char    addr[18];     // "D0:CF:13:7A:60:BA"
+    char    addr[18];     // "A1:B2:C3:D4:E5:F6"
     uint8_t addr_type;
     char    name[24];
     int8_t  rssi;
-    char    wifi_mac[13]; // from the advertisement, "D0CF137A60B8"
+    char    wifi_mac[13]; // from the advertisement, "A1B2C3D4E5F6"
     uint16_t pcode;       // product code from the advertisement, 0 = unknown
     uint8_t flags;        // GGS_FLAG_*
     bool    has_flags;
