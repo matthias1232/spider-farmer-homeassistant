@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="SpiderBridge mark">
+  <defs>
+    <linearGradient id="mbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#191d25"/>
+      <stop offset="1" stop-color="#0d0f13"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="url(#mbg)"/>
+
+  <!-- spider web: eight radial lines out of (150,256) -->
+  <g stroke="#41bdf5" stroke-width="5" stroke-linecap="round" opacity=".5" fill="none">
+    <path d="M150 256 243 73"/>
+    <path d="M150 256 295 111"/>
+    <path d="M150 256 333 163"/>
+    <path d="M150 256 353 224"/>
+    <path d="M150 256 353 288"/>
+    <path d="M150 256 333 349"/>
+    <path d="M150 256 295 401"/>
+    <path d="M150 256 243 439"/>
+  </g>
+  <!-- three concentric arcs = the bridge arch over the web -->
+  <g stroke="#41bdf5" stroke-width="5" stroke-linecap="round" opacity=".5" fill="none">
+    <path d="M182 194 A70 70 0 0 1 182 318"/>
+    <path d="M207 145 A125 125 0 0 1 207 367"/>
+    <path d="M232 96 A180 180 0 0 1 232 416"/>
+  </g>
+
+  <!-- ESP32 module -->
+  <g>
+    <path d="M305 171 318 150 306 134 328 116" fill="none" stroke="#41bdf5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="235" y="171" width="140" height="170" rx="18" fill="#1a1d24" stroke="#41bdf5" stroke-width="6"/>
+    <rect x="263" y="213" width="84" height="86" rx="10" fill="none" stroke="#41bdf5" stroke-width="4" opacity=".5"/>
+    <text x="305" y="268" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="26" font-weight="600" text-anchor="middle" fill="#8ab4f8">ESP32</text>
+    <!-- pin ticks -->
+    <g stroke="#41bdf5" stroke-width="5" stroke-linecap="round">
+      <path d="M235 186 224 186"/><path d="M235 200 224 200"/><path d="M235 214 224 214"/>
+      <path d="M235 228 224 228"/><path d="M235 242 224 242"/><path d="M235 270 224 270"/>
+      <path d="M235 284 224 284"/><path d="M235 298 224 298"/><path d="M235 312 224 312"/>
+      <path d="M235 326 224 326"/>
+      <path d="M375 186 386 186"/><path d="M375 200 386 200"/><path d="M375 214 386 214"/>
+      <path d="M375 228 386 228"/><path d="M375 242 386 242"/><path d="M375 270 386 270"/>
+      <path d="M375 284 386 284"/><path d="M375 298 386 298"/><path d="M375 312 386 312"/>
+      <path d="M375 326 386 326"/>
+      <path d="M258 341 258 353"/><path d="M270 341 270 353"/><path d="M282 341 282 353"/>
+      <path d="M294 341 294 353"/><path d="M306 341 306 353"/><path d="M318 341 318 353"/>
+      <path d="M330 341 330 353"/><path d="M342 341 342 353"/>
+    </g>
+  </g>
+
+  <!-- the leaf-green node where the web meets the chip -->
+  <circle cx="236" cy="256" r="21" fill="#4ade80" opacity=".22"/>
+  <circle cx="236" cy="256" r="12" fill="#4ade80"/>
+</svg>

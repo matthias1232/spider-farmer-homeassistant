@@ -141,18 +141,17 @@ jobs:
 
       - name: Assemble the site
         run: |
+          set -euo pipefail
+          # docs/ is the landing page: docs/index.html becomes the Pages root
+          # and everything under docs/img/ is served from /img/.
           mkdir -p site
+          cp -r docs/. site/
           cp -r installer/. site/installer/
           cp -r demo/. site/demo/
           find artifacts -type f \( -name '*.bin' -o -name '*.json' \) \
             -exec cp {} site/ \;
-          cat > site/index.html <<'EOF'
-          <!DOCTYPE html><html><head><meta charset="utf-8">
-          <meta http-equiv="refresh" content="0; url=installer/">
-          <title>SpiderBridge</title></head>
-          <body><p><a href="installer/">SpiderBridge installer</a> ·
-          <a href="demo/">Live demo of the web interface</a></p></body></html>
-          EOF
+          # Without a root index the whole site 404s, so fail loudly here.
+          test -f site/index.html
           ls -lh site
 
       - uses: actions/configure-pages@v5

@@ -1,5 +1,7 @@
 # SpiderBridge
 
+<p align="center"><img src="docs/img/logo.png" alt="SpiderBridge — a spider web crossed by an ESP32 chip" width="460"></p>
+
 **Bridge your Spider Farmer GGS grow controller to Home Assistant — with an ESP32 instead of a Raspberry Pi.**
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
@@ -17,6 +19,12 @@
 [Donate (PayPal)](https://www.paypal.com/paypalme/matthias1232) ·
 [Supported ESP32 board (Amazon)](https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl)
 
+<p align="center">
+  <a href="docs/img/ha/devices.png"><img src="docs/img/ha/devices.png" alt="Home Assistant: Settings → Devices &amp; services, showing the SpiderBridge bridge and the grow controller" width="32%"></a>
+  <a href="docs/img/ha/controller-full.png"><img src="docs/img/ha/controller-full.png" alt="The grow controller as a native Home Assistant device" width="32%"></a>
+  <a href="docs/img/ha/controller-controls.png"><img src="docs/img/ha/controller-controls.png" alt="Controls card: circulation fan, exhaust fan, lights and outlets" width="32%"></a>
+</p>
+
 ---
 
 ## What is SpiderBridge?
@@ -33,6 +41,8 @@ with 4 MB flash is enough.
 ## Hardware
 
 The firmware was developed and tested with this board:
+
+<p align="center"><img src="docs/img/esp32-board.png" alt="ESP32-WROOM-32 board illustration" width="420"></p>
 
 **→ [QIQIAZI ESP32 NodeMCU Development Board (2-pack, ESP32-WROOM-32, 4 MB, USB-C) — Amazon](https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl)**
 
@@ -127,9 +137,21 @@ The demo is the **real interface, 1:1**, rendered offline from this repository
 (`scripts/extract_gui.py`) with all data replaced by random demo values — no
 personal data, and nothing you click is stored anywhere.
 
+<p align="center">
+  <a href="docs/img/web/settings.png"><img src="docs/img/web/settings.png" alt="Settings page: Wi-Fi, hotspot, Bluetooth, MQTT" width="32%"></a>
+  <a href="docs/img/web/control.png"><img src="docs/img/web/control.png" alt="Control page: lights, fans, climate, outlets" width="32%"></a>
+  <a href="docs/img/web/status.png"><img src="docs/img/web/status.png" alt="Status page: uplink, hotspot, memory, system log" width="32%"></a>
+</p>
+
 ## Installation
 
 Three steps, no app and no cloud involved.
+
+> **Already using the Spider Farmer app?** You can keep it. The only thing that changes is
+> that the controller's Wi-Fi is pointed at the bridge's hotspot once — after that the app
+> still reaches the controller through the bridge (the controller's own cloud link can even
+> be switched off entirely in the web interface), while Home Assistant sees everything at
+> the same time.
 
 ### 1. Flash the firmware (Wi-Fi credentials included)
 
@@ -170,6 +192,9 @@ That's it — no Spider Farmer app was opened at any point.
 Every controller gets its own device with the entities below (152 per controller), plus
 2 bridge-level entities (bridge memory and firmware). The list is generated from the
 firmware's discovery table (`firmware/ggs/main/ha_discovery_table.c`).
+
+<details>
+<summary><strong>All 154 entities</strong> — 152 per controller, 2 on the bridge (kind: Control = writable, Sensor = read-only)</summary>
 
 <!-- ENTITY-LIST:START -->
 Grouped by function. *Kind*: Control = writable entity, Sensor = read-only.
@@ -333,8 +358,14 @@ Grouped by function. *Kind*: Control = writable entity, Sensor = read-only.
 
 **154 entities in total** — 152 per controller + 2 on the bridge itself (binary\_sensor × 1, button × 4, fan × 3, light × 2, number × 36, select × 18, sensor × 36, switch × 33, text × 1, time × 20). Generated from the firmware discovery table by `scripts/gen_entity_docs.py`; do not edit by hand.
 <!-- ENTITY-LIST:END -->
+</details>
 
 ## How it works
+
+![How SpiderBridge works — the controller talks to the ESP32 over Bluetooth, the bridge talks to Home Assistant over MQTT, and controllers on the hotspot can optionally be relayed to the Spider Farmer cloud](docs/img/architecture.png)
+
+<details>
+<summary>Text diagram</summary>
 
 ```
 ┌────────────────────┐   Bluetooth LE    ┌───────────────────────────────┐
@@ -349,6 +380,8 @@ Grouped by function. *Kind*: Control = writable entity, Sensor = read-only.
         │   entities)            │ MQTT  └───────────────────────────────┘
         └────────────────────────┘
 ```
+
+</details>
 
 - **`ggs_ble.c`** — BLE client for the controller's GATT service (UUID `0x00FF`), the
   encrypted GGS protocol, product-code-specific AES keys, two-stage boot (radio + RAM
@@ -406,14 +439,6 @@ Python bridge this ESP32 port is based on, and it is publicly available there:
 (`certs/`). Details: [`firmware/ggs/certs/README.md`](firmware/ggs/certs/README.md).
 
 ## Credits
-
-SpiderBridge is a **learned project**: I am not a professional developer and **not a
-single line of this code was written by hand**. Everything — firmware, web installer,
-demo, this repository — was built through prompt engineering with AI coding agents
-([opencode-go](https://github.com/sst/opencode) / Claude / Gemini) in the Antigravity
-IDE and refined down to the last detail. The learnings, experiments and every fix came
-from extensive troubleshooting and manual log analysis — finding every error, mapping
-every function to the smallest detail of the firmware.
 
 Credits where credit is due:
 

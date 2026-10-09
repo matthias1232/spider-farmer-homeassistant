@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SpiderBridge — grow controller ↔ Home Assistant over BLE, on an ESP32</title>
+<meta name="description" content="ESP32 firmware that mirrors every setting and value of a Spider Farmer GGS grow controller into Home Assistant over MQTT Discovery — no app, no cloud, no Raspberry Pi.">
+<link rel="icon" type="image/svg+xml" href="img/logo-mark.svg">
+<meta property="og:title" content="SpiderBridge">
+<meta property="og:description" content="Every setting and value of your Spider Farmer GGS controller in Home Assistant — flashed once, paired once over Bluetooth, no app and no cloud.">
+<meta property="og:image" content="img/social-preview.png">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#13151a">
+<style>
+:root{
+  --bg:#13151a; --panel:#1a1d24; --line:#2c303a; --text:#e6e6e6;
+  --muted:#9aa0aa; --accent:#8ab4f8; --green:#4ade80; --radius:.6rem;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+img{max-width:100%;height:auto;display:block}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:64rem;margin:0 auto;padding:0 1rem}
+nav{display:flex;gap:1.1rem;align-items:center;flex-wrap:wrap;
+  padding:.7rem 0 .9rem;margin-bottom:1.5rem;border-bottom:1px solid var(--line)}
+nav img{width:1.7rem;height:1.7rem}
+nav .brand{font-weight:600;color:var(--text);margin-right:.3rem}
+nav a{color:var(--muted);font-size:.9rem}
+nav a:hover{color:var(--text);text-decoration:none}
+nav .spacer{flex:1}
+.hero{text-align:center;padding:2.5rem 0 2rem}
+.hero img{width:15rem;margin:0 auto 1.2rem}
+.hero h1{font-size:1.9rem;margin:0 0 .6rem;line-height:1.25}
+.hero p.lead{color:var(--muted);max-width:44rem;margin:0 auto 1.6rem;font-size:1.05rem}
+.btn{display:inline-block;padding:.65rem 1.3rem;border-radius:.4rem;font-weight:600;
+  margin:.2rem .3rem;border:1px solid var(--line);color:var(--text)}
+.btn:hover{text-decoration:none;background:#242832}
+.btn.go{background:var(--accent);border-color:var(--accent);color:#13151a}
+.btn.go:hover{background:#a5c4fa}
+section{padding:2.2rem 0;border-top:1px solid var(--line)}
+h2{font-size:1.35rem;margin:0 0 .4rem}
+.sub{color:var(--muted);margin:0 0 1.4rem}
+.strip{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+figure{margin:0}
+figure img{border:1px solid var(--line);border-radius:var(--radius)}
+figcaption{color:var(--muted);font-size:.85rem;margin-top:.5rem;text-align:center}
+.callout{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--green);
+  border-radius:var(--radius);padding:1.1rem 1.3rem;margin:0}
+.callout strong{color:var(--green)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:1.1rem 1.2rem}
+.card h3{margin:0 0 .5rem;font-size:1rem}
+.card p{margin:0;color:var(--muted);font-size:.9rem}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;counter-reset:step}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:1.1rem 1.2rem;position:relative}
+.step .n{display:inline-block;width:1.7rem;height:1.7rem;line-height:1.7rem;text-align:center;
+  border-radius:50%;background:var(--accent);color:#13151a;font-weight:700;margin-bottom:.6rem}
+.step h3{margin:0 0 .4rem;font-size:1rem}
+.step p{margin:0;color:var(--muted);font-size:.9rem}
+.hw{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:center}
+.hw img{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.gallery a{display:block;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.gallery a:hover{border-color:var(--accent)}
+.gallery figcaption{color:var(--muted);font-size:.85rem;margin-top:.5rem;text-align:center}
+footer{border-top:1px solid var(--line);padding:1.6rem 0 2.4rem;color:var(--muted);font-size:.9rem}
+footer p{margin:.3rem 0}
+@media (max-width:52rem){
+  .strip,.grid,.steps,.gallery{grid-template-columns:1fr 1fr}
+  .hw{grid-template-columns:1fr}
+}
+@media (max-width:34rem){
+  .strip,.grid,.steps,.gallery{grid-template-columns:1fr}
+  .hero h1{font-size:1.5rem}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <img src="img/logo-mark.svg" alt="SpiderBridge logo">
+  <span class="brand">SpiderBridge</span>
+  <a href="https://github.com/matthias1232/spider-farmer-homeassistant">GitHub</a>
+  <a href="installer/">Installer</a>
+  <a href="demo/">Live demo</a>
+  <span class="spacer"></span>
+  <a href="https://github.com/matthias1232/spider-farmer-homeassistant#readme">Docs</a>
+</nav>
+
+<header class="hero">
+  <img src="img/logo.svg" alt="SpiderBridge — spider web and ESP32 chip">
+  <h1>Your grow controller, in Home Assistant</h1>
+  <p class="lead">SpiderBridge is an ESP32 firmware that talks to a <strong>Spider Farmer GGS
+  controller</strong> over Bluetooth and mirrors every value and every setting into
+  <strong>Home Assistant</strong> — 154 entities, auto-discovered over MQTT. No app, no cloud,
+  no Raspberry Pi.</p>
+  <a class="btn go" href="installer/">Install now</a>
+  <a class="btn" href="demo/">Live demo</a>
+  <a class="btn" href="https://github.com/matthias1232/spider-farmer-homeassistant">GitHub</a>
+</header>
+
+<section>
+  <h2>One device per controller, in Home Assistant</h2>
+  <p class="sub">The bridge announces itself over MQTT Discovery. The controller appears as its
+  own device with the complete app feature set — lights, fans, climate, outlets, day/night
+  targets, alarms, calibration and grow plan.</p>
+  <div class="strip">
+    <figure>
+      <img src="img/ha/devices.png" alt="Home Assistant devices and services showing SpiderBridge and the Grow Tent controller" loading="lazy">
+      <figcaption>Settings → Devices &amp; services</figcaption>
+    </figure>
+    <figure>
+      <img src="img/ha/controller-full.png" alt="The controller's device page in Home Assistant" loading="lazy">
+      <figcaption>The controller as a native HA device</figcaption>
+    </figure>
+    <figure>
+      <img src="img/ha/controller-controls.png" alt="Controls card: fans, lights and outlets" loading="lazy">
+      <figcaption>Controls: fans, lights, outlets</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <p class="callout"><strong>Using the Spider Farmer app?</strong> Keep it — you only have to
+  switch the controller's Wi-Fi to the bridge's hotspot once. The app keeps working through
+  the bridge (the controller's own cloud link can even be turned off in the web interface),
+  and Home Assistant gets the full picture at the same time.</p>
+</section>
+
+<section>
+  <h2>Everything the app can do — 1:1</h2>
+  <p class="sub">152 entities per controller plus 2 on the bridge itself. Native HA entities, so
+  automations, dashboards, voice assistants and the Energy dashboard all work.</p>
+  <div class="grid">
+    <div class="card">
+      <h3>Both lights</h3>
+      <p>On/off, brightness, Manual / Schedule / PPFD mode, window, target brightness, fade
+      time, PPFD target with min/max brightness, dim and off-threshold.</p>
+    </div>
+    <div class="card">
+      <h3>Both fans</h3>
+      <p>Circulation fan and exhaust fan: speed, Manual / Schedule / Cycle / Environment modes,
+      schedule and cycle windows, standby speed, oscillation, natural wind, CO₂-close.</p>
+    </div>
+    <div class="card">
+      <h3>Climate &amp; outlets</h3>
+      <p>Heater, humidifier and dehumidifier, plus all ten outlets of the power strips —
+      every one of them a switch you can automate.</p>
+    </div>
+    <div class="card">
+      <h3>Day/night cycle &amp; alarms</h3>
+      <p>Targets and deadbands for temperature, humidity and CO₂ by day and night, and all 13
+      alarm types with their min/max ranges.</p>
+    </div>
+    <div class="card">
+      <h3>Live readings</h3>
+      <p>Air temperature, humidity, CO₂, VPD, PPFD, substrate temperature/humidity and EC —
+      plus controller clock, uptime, restarts and free memory.</p>
+    </div>
+    <div class="card">
+      <h3>Grow plan &amp; time</h3>
+      <p>Multi-stage plans from templates with labels, dates, colours and reminders; timezone,
+      automatic daylight saving and one-click time sync.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Quick start</h2>
+  <p class="sub">Three steps. No Spider Farmer account, no vendor server, no phone in the loop.</p>
+  <div class="steps">
+    <div class="step">
+      <span class="n">1</span>
+      <h3>Flash the ESP32</h3>
+      <p>Open the <a href="installer/">web installer</a> in Chrome or Edge, connect the board
+      over USB and click <em>Connect</em>. Your Wi-Fi credentials are sent along through Improv
+      Serial while you install.</p>
+    </div>
+    <div class="step">
+      <span class="n">2</span>
+      <h3>Connect the bridge to HA</h3>
+      <p>Point the bridge at your MQTT broker (Settings → MQTT). The diagnostics entities show
+      up immediately; the controller follows once it is paired.</p>
+    </div>
+    <div class="step">
+      <span class="n">3</span>
+      <h3>Pair the controller</h3>
+      <p>In the web interface open <em>Control → Bluetooth: scan</em>, pick your controller and
+      confirm. The bridge hands over the hotspot credentials and the controller appears in
+      Home Assistant with all of its entities.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>How it works</h2>
+  <p class="sub">The controller and the bridge talk the encrypted GGS protocol over Bluetooth;
+  the bridge talks MQTT to Home Assistant. Optionally, controllers that join the bridge's
+  hotspot are relayed to the real Spider Farmer cloud — or completely cut off from it.</p>
+  <figure>
+    <img src="img/architecture.png" alt="Controller to bridge over Bluetooth, bridge to Home Assistant over MQTT, optional relay to the Spider Farmer cloud" loading="lazy">
+  </figure>
+</section>
+
+<section>
+  <h2>Hardware</h2>
+  <div class="hw">
+    <img src="img/esp32-board.svg" alt="Illustration of an ESP32-WROOM-32 board" loading="lazy">
+    <div>
+      <p>A ~€10 ESP32 board with 4 MB flash is enough — developed and tested with the
+      ESP32-WROOM-32 board below. Any other ESP32 with 4 MB flash works as well.</p>
+      <p>
+        <a class="btn" href="https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl">
+        Supported ESP32 board (Amazon)</a>
+      </p>
+      <p class="sub" style="margin:0">Ordering through the affiliate link supports the project at
+      no extra cost to you. A Spider Farmer GGS controller with Bluetooth and any Home Assistant
+      installation with MQTT complete the picture.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>The bridge's own web interface</h2>
+  <p class="sub">Six pages, running entirely on the ESP32: settings, control, status, network,
+  MQTT log and firmware update. The
+  <a href="demo/">live demo</a> is the real interface rendered offline with random data.</p>
+  <div class="gallery">
+    <a href="demo/">
+      <img src="img/web/settings.png" alt="Settings page" loading="lazy">
+      <figcaption>Settings — Wi-Fi, hotspot, Bluetooth, MQTT</figcaption>
+    </a>
+    <a href="demo/control/">
+      <img src="img/web/control.png" alt="Control page" loading="lazy">
+      <figcaption>Control — every controller setting</figcaption>
+    </a>
+    <a href="demo/status/">
+      <img src="img/web/status.png" alt="Status page" loading="lazy">
+      <figcaption>Status — uplink, hotspot, memory, log</figcaption>
+    </a>
+    <a href="demo/network/">
+      <img src="img/web/network.png" alt="Network page" loading="lazy">
+      <figcaption>Network — hotspot clients and filters</figcaption>
+    </a>
+    <a href="demo/log/">
+      <img src="img/web/log.png" alt="MQTT log page" loading="lazy">
+      <figcaption>MQTT log — live traffic</figcaption>
+    </a>
+    <a href="demo/update/">
+      <img src="img/web/update.png" alt="Firmware page" loading="lazy">
+      <figcaption>Firmware — update and restart</figcaption>
+    </a>
+  </div>
+</section>
+
+<footer>
+  <p><a href="https://github.com/matthias1232/spider-farmer-homeassistant">GitHub</a> ·
+  <a href="https://github.com/matthias1232/spider-farmer-homeassistant#readme">Documentation</a> ·
+  <a href="installer/">Installer</a> · <a href="demo/">Live demo</a></p>
+  <p>Firmware, installer and documentation are free and GPL-3.0-or-later. A donation is
+  voluntary: <a href="https://www.paypal.com/paypalme/matthias1232">PayPal</a></p>
+  <p>All data in the live demo is simulated — the demo pages are extracted from this
+  repository with <code>scripts/extract_gui.py</code>.</p>
+</footer>
+</div>
+</body>
+</html>

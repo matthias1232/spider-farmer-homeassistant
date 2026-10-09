@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="540" viewBox="0 0 1280 540" role="img" aria-label="Architecture: Spider Farmer controller connects over BLE to the ESP32 bridge, which connects over MQTT to Home Assistant">
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0 0 L10 4 L0 8 Z" fill="#41bdf5"/>
+    </marker>
+    <marker id="arrg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0 0 L10 4 L0 8 Z" fill="#4ade80"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="540" rx="28" fill="#13151a" stroke="#262b35" stroke-width="2"/>
+
+  <!-- optional: app + cloud stay in the loop -->
+  <g>
+    <rect x="48" y="56" width="288" height="104" rx="14" fill="none" stroke="#4ade80" stroke-width="2" stroke-dasharray="8 6"/>
+    <text x="192" y="102" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="22" font-weight="600" text-anchor="middle" fill="#f2f4f8">Spider Farmer app</text>
+    <text x="192" y="132" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="16" text-anchor="middle" fill="#8b93a7">cloud mirroring · optional</text>
+    <path d="M192 160 L192 256" fill="none" stroke="#4ade80" stroke-width="2" stroke-dasharray="6 6" marker-end="url(#arrg)"/>
+    <text x="206" y="214" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="15" fill="#4ade80">keeps working</text>
+  </g>
+
+  <!-- controller -->
+  <g>
+    <rect x="48" y="256" width="288" height="168" rx="18" fill="#1a1d24" stroke="#2c313d" stroke-width="2"/>
+    <text x="192" y="330" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="26" font-weight="600" text-anchor="middle" fill="#f2f4f8">Spider Farmer</text>
+    <text x="192" y="362" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="26" font-weight="600" text-anchor="middle" fill="#f2f4f8">controller</text>
+    <text x="192" y="400" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="17" text-anchor="middle" fill="#8b93a7">fans · lights · sensors</text>
+  </g>
+
+  <!-- bridge -->
+  <g>
+    <rect x="496" y="236" width="288" height="208" rx="18" fill="#1a1d24" stroke="#41bdf5" stroke-width="2.5"/>
+    <text x="640" y="300" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="28" font-weight="600" text-anchor="middle" fill="#8ab4f8">SpiderBridge</text>
+    <text x="640" y="334" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="19" text-anchor="middle" fill="#f2f4f8">ESP32-WROOM-32</text>
+    <path d="M524 354 L756 354" stroke="#2c313d" stroke-width="2"/>
+    <text x="640" y="386" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="17" text-anchor="middle" fill="#8b93a7">MQTT · discovery</text>
+    <text x="640" y="412" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="17" text-anchor="middle" fill="#8b93a7">web UI · OTA · log</text>
+  </g>
+
+  <!-- Home Assistant -->
+  <g>
+    <rect x="944" y="256" width="288" height="168" rx="18" fill="#1a1d24" stroke="#2c313d" stroke-width="2"/>
+    <text x="1088" y="326" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="26" font-weight="600" text-anchor="middle" fill="#f2f4f8">Home Assistant</text>
+    <text x="1088" y="358" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="19" text-anchor="middle" fill="#8b93a7">MQTT integration</text>
+    <text x="1088" y="386" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="17" text-anchor="middle" fill="#8b93a7">entities + history</text>
+  </g>
+
+  <!-- links -->
+  <path d="M336 340 L496 340" fill="none" stroke="#41bdf5" stroke-width="3" marker-end="url(#arr)"/>
+  <text x="416" y="316" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="17" text-anchor="middle" fill="#8ab4f8">BLE / hotspot</text>
+  <text x="416" y="368" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="15" text-anchor="middle" fill="#6f7787">one controller per bridge</text>
+
+  <path d="M784 340 L944 340" fill="none" stroke="#41bdf5" stroke-width="3" marker-end="url(#arr)"/>
+  <text x="864" y="316" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="17" text-anchor="middle" fill="#8ab4f8">MQTT + discovery</text>
+  <text x="864" y="368" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="15" text-anchor="middle" fill="#6f7787">auto-discovered</text>
+
+  <text x="640" y="514" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="16" text-anchor="middle" fill="#6f7787">one bridge per controller · everything else automatic</text>
+</svg>

@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="640" viewBox="0 0 900 640" role="img" aria-label="ESP32-WROOM-32 development board illustration">
+  <defs>
+    <linearGradient id="spcb" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#18222c"/>
+      <stop offset="1" stop-color="#101820"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="900" height="640" rx="28" fill="#13151a" stroke="#262b35" stroke-width="2"/>
+
+  <!-- board -->
+  <rect x="170" y="150" width="560" height="330" rx="22" fill="url(#spcb)" stroke="#2c313d" stroke-width="2"/>
+  <g fill="#0d0f13" stroke="#2c313d" stroke-width="2">
+    <circle cx="196" cy="176" r="10"/>
+    <circle cx="704" cy="176" r="10"/>
+    <circle cx="196" cy="454" r="10"/>
+    <circle cx="704" cy="454" r="10"/>
+  </g>
+
+  <!-- ESP32-WROOM-32 shield -->
+  <g>
+    <rect x="290" y="190" width="320" height="190" rx="10" fill="#2b3341" stroke="#41bdf5" stroke-width="2"/>
+    <!-- PCB antenna: vertical hatches under a horizontal bar -->
+    <g stroke="#41bdf5" stroke-width="3" stroke-linecap="round">
+      <path d="M310 212 L590 212"/>
+      <path d="M320 212 L320 240"/><path d="M340 212 L340 240"/><path d="M360 212 L360 240"/>
+      <path d="M380 212 L380 240"/><path d="M400 212 L400 240"/><path d="M420 212 L420 240"/>
+      <path d="M440 212 L440 240"/><path d="M460 212 L460 240"/><path d="M480 212 L480 240"/>
+      <path d="M500 212 L500 240"/><path d="M520 212 L520 240"/><path d="M540 212 L540 240"/>
+      <path d="M560 212 L560 240"/><path d="M580 212 L580 240"/>
+    </g>
+    <text x="450" y="318" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="24" font-weight="600" text-anchor="middle" fill="#f2f4f8">ESP32-WROOM-32</text>
+    <text x="450" y="346" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="16" text-anchor="middle" fill="#8b93a7">Espressif</text>
+  </g>
+
+  <!-- pin headers: 15 pins per side -->
+  <g fill="#d9a441" stroke="#8a6a2a" stroke-width="1.5">
+    <rect x="150" y="176" width="36" height="12" rx="3"/>
+    <rect x="150" y="195" width="36" height="12" rx="3"/>
+    <rect x="150" y="214" width="36" height="12" rx="3"/>
+    <rect x="150" y="233" width="36" height="12" rx="3"/>
+    <rect x="150" y="252" width="36" height="12" rx="3"/>
+    <rect x="150" y="271" width="36" height="12" rx="3"/>
+    <rect x="150" y="290" width="36" height="12" rx="3"/>
+    <rect x="150" y="309" width="36" height="12" rx="3"/>
+    <rect x="150" y="328" width="36" height="12" rx="3"/>
+    <rect x="150" y="347" width="36" height="12" rx="3"/>
+    <rect x="150" y="366" width="36" height="12" rx="3"/>
+    <rect x="150" y="385" width="36" height="12" rx="3"/>
+    <rect x="150" y="404" width="36" height="12" rx="3"/>
+    <rect x="150" y="423" width="36" height="12" rx="3"/>
+    <rect x="150" y="442" width="36" height="12" rx="3"/>
+    <rect x="664" y="176" width="36" height="12" rx="3"/>
+    <rect x="664" y="195" width="36" height="12" rx="3"/>
+    <rect x="664" y="214" width="36" height="12" rx="3"/>
+    <rect x="664" y="233" width="36" height="12" rx="3"/>
+    <rect x="664" y="252" width="36" height="12" rx="3"/>
+    <rect x="664" y="271" width="36" height="12" rx="3"/>
+    <rect x="664" y="290" width="36" height="12" rx="3"/>
+    <rect x="664" y="309" width="36" height="12" rx="3"/>
+    <rect x="664" y="328" width="36" height="12" rx="3"/>
+    <rect x="664" y="347" width="36" height="12" rx="3"/>
+    <rect x="664" y="366" width="36" height="12" rx="3"/>
+    <rect x="664" y="385" width="36" height="12" rx="3"/>
+    <rect x="664" y="404" width="36" height="12" rx="3"/>
+    <rect x="664" y="423" width="36" height="12" rx="3"/>
+    <rect x="664" y="442" width="36" height="12" rx="3"/>
+  </g>
+
+  <!-- pin names -->
+  <g font-family="ui-monospace,Consolas,Menlo,monospace" font-size="13" fill="#6f7787">
+    <text x="142" y="186" text-anchor="end">3V3</text>
+    <text x="142" y="205" text-anchor="end">GND</text>
+    <text x="142" y="224" text-anchor="end">IO23</text>
+    <text x="142" y="243" text-anchor="end">IO22</text>
+    <text x="142" y="262" text-anchor="end">TX0</text>
+    <text x="142" y="281" text-anchor="end">RX0</text>
+    <text x="142" y="300" text-anchor="end">IO21</text>
+    <text x="142" y="319" text-anchor="end">IO19</text>
+    <text x="142" y="338" text-anchor="end">IO18</text>
+    <text x="142" y="357" text-anchor="end">IO5</text>
+    <text x="142" y="376" text-anchor="end">IO17</text>
+    <text x="142" y="395" text-anchor="end">IO16</text>
+    <text x="142" y="414" text-anchor="end">IO4</text>
+    <text x="142" y="433" text-anchor="end">IO2</text>
+    <text x="142" y="452" text-anchor="end">IO15</text>
+    <text x="708" y="186">EN</text>
+    <text x="708" y="205">VP36</text>
+    <text x="708" y="224">VN39</text>
+    <text x="708" y="243">IO34</text>
+    <text x="708" y="262">IO35</text>
+    <text x="708" y="281">IO32</text>
+    <text x="708" y="300">IO33</text>
+    <text x="708" y="319">IO25</text>
+    <text x="708" y="338">IO26</text>
+    <text x="708" y="357">IO27</text>
+    <text x="708" y="376">IO14</text>
+    <text x="708" y="395">IO12</text>
+    <text x="708" y="414">IO13</text>
+    <text x="708" y="433">IO11</text>
+    <text x="708" y="452">IO10</text>
+  </g>
+
+  <!-- buttons, LED, USB-C -->
+  <text x="236" y="440" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="12" text-anchor="middle" fill="#6f7787">BOOT</text>
+  <rect x="210" y="446" width="52" height="34" rx="6" fill="#2b3341" stroke="#2c313d" stroke-width="2"/>
+  <text x="664" y="440" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="12" text-anchor="middle" fill="#6f7787">EN</text>
+  <rect x="638" y="446" width="52" height="34" rx="6" fill="#2b3341" stroke="#2c313d" stroke-width="2"/>
+  <rect x="606" y="452" width="18" height="10" rx="2" fill="#4ade80" opacity=".8"/>
+  <rect x="390" y="458" width="120" height="34" rx="8" fill="#8b93a7"/>
+  <rect x="404" y="466" width="92" height="18" rx="6" fill="#2b3341"/>
+
+  <!-- captions -->
+  <text x="450" y="116" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="26" font-weight="600" text-anchor="middle" fill="#f2f4f8">One small board</text>
+  <text x="450" y="596" font-family="system-ui,'Segoe UI',Roboto,sans-serif" font-size="17" text-anchor="middle" fill="#8b93a7">ESP32-WROOM-32 devkit · flashed over USB-C · runs the bridge firmware</text>
+</svg>
+
