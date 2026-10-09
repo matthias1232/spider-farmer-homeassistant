@@ -1,4 +1,4 @@
-# SpiderBridge
+﻿# SpiderBridge
 
 <p align="center"><img src="docs/img/logo.png" alt="SpiderBridge — a spider web crossed by an ESP32 chip" width="460"></p>
 
@@ -105,12 +105,12 @@ Additionally required:
 - Substrate temperature, humidity, EC (averages)
 - Controller clock, firmware/hardware version, build date, uptime, restarts, free memory,
   Wi-Fi signal strength, timezone rules
-- Bridge free memory and firmware version (bridge-level diagnostics)
+- Bridge diagnostics: uplink network, address, signal and quality, uplink drops, hotspot clients, free memory, uptime and firmware version
 
 **Home Assistant integration**
 
-- **Automatic MQTT Discovery** — 154 entities per setup appear by themselves, grouped
-  correctly into one device per controller plus one bridge device
+- **Automatic MQTT Discovery** — 183 entities (153 per controller + 30 on the bridge) appear by
+  themselves, grouped correctly into one device per controller plus one bridge device
 - Full **availability** handling (bridge + per controller)
 - Every setting is a native HA entity (switch/select/number/time/light/fan/…), so
   automations, dashboards, voice assistants and the Energy dashboard all work
@@ -193,174 +193,204 @@ That's it — no Spider Farmer app was opened at any point.
 
 ## Home Assistant entities
 
-Every controller gets its own device with the entities below (152 per controller), plus
-2 bridge-level entities (bridge memory and firmware). The list is generated from the
-firmware's discovery table (`firmware/ggs/main/ha_discovery_table.c`).
+Every controller gets its own device with 153 entities, and the bridge has its own device with
+30 more (clock and time zone, network switches, uplink and hotspot diagnostics, restart,
+factory reset). The list below is generated from the firmware
+(`firmware/ggs/main/ha_discovery_table.c` and `firmware/ggs/main/ha_mqtt.c`).
 
 <details>
-<summary><strong>All 154 entities</strong> — 152 per controller, 2 on the bridge (kind: Control = writable, Sensor = read-only)</summary>
+<summary><strong>All 183 entities</strong> — 153 per controller, 30 on the bridge (kind: Control = writable, Sensor = read-only)</summary>
 
 <!-- ENTITY-LIST:START -->
 Grouped by function. *Kind*: Control = writable entity, Sensor = read-only.
 
 | Entity | Platform | Kind | Unit |
 |---|---|---|---|
-| $N | fan | Control | — |
-| $N | select | Control (config) | — |
-| $N | select | Control | — |
-| $N | time | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | select | Control (config) | — |
-| $N | select | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | select | Control (config) | — |
-| $N | fan | Control | — |
-| $N | switch | Control | — |
-| $N | fan | Control | — |
-| $N | select | Control (config) | — |
-| $N | select | Control | — |
-| $N | time | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | select | Control (config) | — |
-| $N | select | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | select | Control (config) | — |
-| $N | switch | Control | — |
-| $N | light | Control | — |
-| $N | time | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | number | Control (config) | % |
-| $N | select | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | number | Control (config) | µmol/m²/s |
-| $N | select | Control (config) | — |
-| $N | number | Control (config) | % |
-| $N | number | Control (config) | % |
-| $N | select | Control (config) | — |
-| $N | select | Control (config) | — |
-| $N | light | Control | — |
-| $N | time | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | number | Control (config) | % |
-| $N | select | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | number | Control (config) | µmol/m²/s |
-| $N | select | Control (config) | — |
-| $N | number | Control (config) | % |
-| $N | number | Control (config) | % |
-| $N | select | Control (config) | — |
-| $N | select | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | time | Control (config) | — |
-| $N | number | Control (config) | °C |
-| $N | number | Control (config) | °C |
-| $N | number | Control (config) | °C |
-| $N | number | Control (config) | % |
-| $N | number | Control (config) | % |
-| $N | number | Control (config) | % |
-| $N | number | Control (config) | ppm |
-| $N | number | Control (config) | ppm |
-| $N | number | Control (config) | ppm |
-| $N | switch | Control | — |
-| $N | switch | Control | — |
-| $N | switch | Control | — |
-| $N | switch | Control | — |
-| $N | switch | Control | — |
-| $N | switch | Control | — |
-| $N | switch | Control | — |
-| $N | switch | Control | — |
-| $N | switch | Control | — |
-| $N | switch | Control | — |
-| $N | switch | Control | — |
-| $N | switch | Control | — |
-| $N | switch | Control | — |
-| $N | number | Control (config) | °C |
-| $N | number | Control (config) | % |
-| $N | number | Control (config) | ppm |
-| $N | number | Control (config) | — |
-| $N | switch | Control | — |
-| $N | sensor | Sensor | — |
-| $N | sensor | Sensor | — |
-| $N | sensor | Sensor | — |
-| $N | switch | Control (config) | — |
-| $N | number | Control (config) | °C |
-| $N | number | Control (config) | °C |
-| $N | switch | Control (config) | — |
-| $N | number | Control (config) | % |
-| $N | number | Control (config) | % |
-| $N | switch | Control (config) | — |
-| $N | number | Control (config) | kPa |
-| $N | number | Control (config) | kPa |
-| $N | switch | Control (config) | — |
-| $N | number | Control (config) | ppm |
-| $N | number | Control (config) | ppm |
-| $N | switch | Control (config) | — |
-| $N | number | Control (config) | µmol/m²/s |
-| $N | switch | Control (config) | — |
-| $N | number | Control (config) | °C |
-| $N | number | Control (config) | °C |
-| $N | switch | Control (config) | — |
-| $N | number | Control (config) | % |
-| $N | number | Control (config) | % |
-| $N | switch | Control (config) | — |
-| $N | number | Control (config) | mS/cm |
-| $N | number | Control (config) | mS/cm |
-| $N | switch | Control (config) | — |
-| $N | switch | Control (config) | — |
-| $N | switch | Control (config) | — |
-| $N | switch | Control (config) | — |
-| $N | switch | Control (config) | — |
-| $N | switch | Control (config) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | button | Control (config) | — |
-| $N | switch | Control | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | d |
-| $N | binary_sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | button | Control (config) | — |
-| $N | button | Control (config) | — |
-| $N | text | Control (config) | — |
-| $N | button | Control (config) | — |
-| $N | switch | Control (config) | — |
-| $N | switch | Control (config) | — |
-| $N | sensor | Sensor | °C |
-| $N | sensor | Sensor | % |
-| $N | sensor | Sensor | ppm |
-| $N | sensor | Sensor | kPa |
-| $N | sensor | Sensor | µmol/m²/s |
-| $N | sensor | Sensor | °C |
-| $N | sensor | Sensor | % |
-| $N | sensor | Sensor | mS/cm |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | s |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | — |
-| $N | sensor | Sensor (diagnostic) | dBm |
-| $N | sensor | Sensor (diagnostic) | — |
-| $B | sensor | Sensor (diagnostic) | — |
-| $B | sensor | Sensor (diagnostic) | — |
+| Fan | fan | Control | — |
+| Fan Cycle Off Time | time | Control (config) | — |
+| Fan Cycle Repeats | select | Control (config) | — |
+| Fan Cycle Run Time | time | Control (config) | — |
+| Fan Cycle Start Time | time | Control (config) | — |
+| Fan Mode | select | Control | — |
+| Fan Natural Wind | switch | Control | — |
+| Fan Oscillation | fan | Control | — |
+| Fan Schedule End Time | time | Control (config) | — |
+| Fan Schedule Speed | select | Control (config) | — |
+| Fan Schedule Start Time | time | Control (config) | — |
+| Fan Speed | select | Control (config) | — |
+| Fan Standby Speed | select | Control (config) | — |
+| Close CO2 While Blower Runs | switch | Control | — |
+| Fan Exhaust | fan | Control | — |
+| Fan Exhaust Cycle Off Time | time | Control (config) | — |
+| Fan Exhaust Cycle Repeats | select | Control (config) | — |
+| Fan Exhaust Cycle Run Time | time | Control (config) | — |
+| Fan Exhaust Cycle Start Time | time | Control (config) | — |
+| Fan Exhaust Mode | select | Control | — |
+| Fan Exhaust Schedule End Time | time | Control (config) | — |
+| Fan Exhaust Schedule Speed | select | Control (config) | — |
+| Fan Exhaust Schedule Start Time | time | Control (config) | — |
+| Fan Exhaust Speed | select | Control (config) | — |
+| Fan Exhaust Standby Speed | select | Control (config) | — |
+| Light 1 | light | Control | — |
+| Light 1 Dim Threshold | select | Control (config) | — |
+| Light 1 Off Threshold | select | Control (config) | — |
+| Light 1 PPFD End Time | time | Control (config) | — |
+| Light 1 PPFD Fade Time | select | Control (config) | — |
+| Light 1 PPFD Max Brightness | number | Control (config) | % |
+| Light 1 PPFD Min Brightness | number | Control (config) | % |
+| Light 1 PPFD Start Time | time | Control (config) | — |
+| Light 1 PPFD Target | number | Control (config) | µmol/m²/s |
+| Light 1 Schedule Brightness | number | Control (config) | % |
+| Light 1 Schedule End Time | time | Control (config) | — |
+| Light 1 Schedule Fade Time | select | Control (config) | — |
+| Light 1 Schedule Start Time | time | Control (config) | — |
+| Light 2 | light | Control | — |
+| Light 2 Dim Threshold | select | Control (config) | — |
+| Light 2 Off Threshold | select | Control (config) | — |
+| Light 2 PPFD End Time | time | Control (config) | — |
+| Light 2 PPFD Fade Time | select | Control (config) | — |
+| Light 2 PPFD Max Brightness | number | Control (config) | % |
+| Light 2 PPFD Min Brightness | number | Control (config) | % |
+| Light 2 PPFD Start Time | time | Control (config) | — |
+| Light 2 PPFD Target | number | Control (config) | µmol/m²/s |
+| Light 2 Schedule Brightness | number | Control (config) | % |
+| Light 2 Schedule End Time | time | Control (config) | — |
+| Light 2 Schedule Fade Time | select | Control (config) | — |
+| Light 2 Schedule Start Time | time | Control (config) | — |
+| Day Cycle End | time | Control (config) | — |
+| Day Cycle Start | time | Control (config) | — |
+| Target CO2 Day | number | Control (config) | ppm |
+| Target CO2 Deadband | number | Control (config) | ppm |
+| Target CO2 Night | number | Control (config) | ppm |
+| Target Humidity Day | number | Control (config) | % |
+| Target Humidity Deadband | number | Control (config) | % |
+| Target Humidity Night | number | Control (config) | % |
+| Target Temperature Day | number | Control (config) | °C |
+| Target Temperature Deadband | number | Control (config) | °C |
+| Target Temperature Night | number | Control (config) | °C |
+| Outlet 1 | switch | Control | — |
+| Outlet 10 | switch | Control | — |
+| Outlet 2 | switch | Control | — |
+| Outlet 3 | switch | Control | — |
+| Outlet 4 | switch | Control | — |
+| Outlet 5 | switch | Control | — |
+| Outlet 6 | switch | Control | — |
+| Outlet 7 | switch | Control | — |
+| Outlet 8 | switch | Control | — |
+| Outlet 9 | switch | Control | — |
+| Switch Dehumidifier | switch | Control | — |
+| Switch Heater | switch | Control | — |
+| Switch Humidifier | switch | Control | — |
+| CO2 Offset | number | Control (config) | ppm |
+| Humidity Offset | number | Control (config) | % |
+| PPFD Offset | number | Control (config) | — |
+| Temperature Offset | number | Control (config) | °C |
+| Sensor Cleaning | switch | Control | — |
+| Sensor Cleaning Phase Ends | sensor | Sensor | — |
+| Sensor Cleaning Status | sensor | Sensor | — |
+| Sensor Cleaning Time Left | sensor | Sensor | — |
+| Alarm Air Humidity | switch | Control (config) | — |
+| Alarm Air Humidity Maximum | number | Control (config) | % |
+| Alarm Air Humidity Minimum | number | Control (config) | % |
+| Alarm Air Temperature | switch | Control (config) | — |
+| Alarm Air Temperature Maximum | number | Control (config) | °C |
+| Alarm Air Temperature Minimum | number | Control (config) | °C |
+| Alarm CO2 | switch | Control (config) | — |
+| Alarm CO2 Maximum | number | Control (config) | ppm |
+| Alarm CO2 Minimum | number | Control (config) | ppm |
+| Alarm Dehumidifier Water Tank Full | switch | Control (config) | — |
+| Alarm Humidifier Water Low | switch | Control (config) | — |
+| Alarm Light Over-Temperature | switch | Control (config) | — |
+| Alarm PPFD | switch | Control (config) | — |
+| Alarm PPFD Maximum | number | Control (config) | µmol/m²/s |
+| Alarm Sensor Offline | switch | Control (config) | — |
+| Alarm Substrate EC | switch | Control (config) | — |
+| Alarm Substrate EC Maximum | number | Control (config) | mS/cm |
+| Alarm Substrate EC Minimum | number | Control (config) | mS/cm |
+| Alarm Substrate Moisture | switch | Control (config) | — |
+| Alarm Substrate Moisture Maximum | number | Control (config) | % |
+| Alarm Substrate Moisture Minimum | number | Control (config) | % |
+| Alarm Substrate Temperature | switch | Control (config) | — |
+| Alarm Substrate Temperature Maximum | number | Control (config) | °C |
+| Alarm Substrate Temperature Minimum | number | Control (config) | °C |
+| Alarm VPD | switch | Control (config) | — |
+| Alarm VPD Maximum | number | Control (config) | kPa |
+| Alarm VPD Minimum | number | Control (config) | kPa |
+| Alarm Water Leak | switch | Control (config) | — |
+| Alarm Water Shortage | switch | Control (config) | — |
+| Last Alarm Device (code) | sensor | Sensor (diagnostic) | — |
+| Last Alarm Number | sensor | Sensor (diagnostic) | — |
+| Last Alarm Time | sensor | Sensor (diagnostic) | — |
+| Last Alarm Time (epoch) | sensor | Sensor (diagnostic) | — |
+| Last Alarm Type (code) | sensor | Sensor (diagnostic) | — |
+| Add Plan Stage From Template | button | Control (config) | — |
+| Grow Plan | switch | Control | — |
+| Plan Kept On Bridge | binary_sensor | Sensor (diagnostic) | — |
+| Plan Stage | sensor | Sensor (diagnostic) | — |
+| Plan Stage Color | sensor | Sensor (diagnostic) | — |
+| Plan Stage Day | sensor | Sensor (diagnostic) | d |
+| Plan Stage End | sensor | Sensor (diagnostic) | — |
+| Plan Stage Reminder | sensor | Sensor (diagnostic) | — |
+| Plan Stage Start | sensor | Sensor (diagnostic) | — |
+| Plan Stages | sensor | Sensor (diagnostic) | — |
+| Plan Template | select | Control (config) | — |
+| Pair Bluetooth (stop advertising) | button | Control (config) | — |
+| Unpair Bluetooth | button | Control (config) | — |
+| Time Zone | text | Control (config) | — |
+| Sync Device Time | button | Control (config) | — |
+| Summer Time | switch | Control (config) | — |
+| Controller Internet Access | switch | Control (config) | — |
+| Air CO2 | sensor | Sensor | ppm |
+| Air Humidity | sensor | Sensor | % |
+| Air PPFD | sensor | Sensor | µmol/m²/s |
+| Air Temperature | sensor | Sensor | °C |
+| Air VPD | sensor | Sensor | kPa |
+| Soil Average EC | sensor | Sensor | mS/cm |
+| Soil Average Humidity | sensor | Sensor | % |
+| Soil Average Temperature | sensor | Sensor | °C |
+| Controller Firmware | sensor | Sensor (diagnostic) | — |
+| Controller Free Memory | sensor | Sensor (diagnostic) | — |
+| Controller Hardware | sensor | Sensor (diagnostic) | — |
+| Controller Restarts | sensor | Sensor (diagnostic) | — |
+| Controller Signal | sensor | Sensor (diagnostic) | dBm |
+| Controller Time | sensor | Sensor (diagnostic) | — |
+| Controller Uptime | sensor | Sensor (diagnostic) | — |
+| Controller Uptime Seconds | sensor | Sensor (diagnostic) | s |
+| Daylight Saving Rules | sensor | Sensor (diagnostic) | — |
+| Firmware Built | sensor | Sensor (diagnostic) | — |
+| Firmware Updated | sensor | Sensor (diagnostic) | — |
+| Apply clock to all controllers | switch | Control (config) | — |
+| Bridge time | sensor | Sensor | — |
+| Clock synchronised | binary_sensor | Sensor | — |
+| Daylight saving | select | Control | — |
+| Follow the zone rules | switch | Control | — |
+| NTP server | text | Control | — |
+| Redirect time requests | switch | Control (config) | — |
+| Summer time | switch | Control | — |
+| Time sync while offline | switch | Control (config) | — |
+| Time zone | select | Control | — |
+| Time zone (type any) | text | Control (config) | — |
+| Internet for controllers | switch | Control (config) | — |
+| Mirror to the Spider Farmer cloud | switch | Control (config) | — |
+| Name resolution while offline | switch | Control (config) | — |
+| Redirect name lookups | switch | Control (config) | — |
+| Hotspot clients | sensor | Sensor (diagnostic) | — |
+| Uplink address | sensor | Sensor (diagnostic) | — |
+| Uplink connected | binary_sensor | Sensor (diagnostic) | — |
+| Uplink drops | sensor | Sensor (diagnostic) | — |
+| Uplink network | sensor | Sensor (diagnostic) | — |
+| Uplink quality | sensor | Sensor (diagnostic) | % |
+| Uplink signal | sensor | Sensor (diagnostic) | dBm |
+| Bridge Firmware | sensor | Sensor (diagnostic) | — |
+| Bridge Free Memory | sensor | Sensor (diagnostic) | — |
+| Firmware version | sensor | Sensor (diagnostic) | — |
+| Free memory | sensor | Sensor (diagnostic) | kB |
+| Uptime | sensor | Sensor (diagnostic) | s |
+| Device name | text | Control (config) | — |
+| Factory reset (type RESET) | text | Control (config) | — |
+| Restart bridge | button | Control (config) | — |
 
-**154 entities in total** — 152 per controller + 2 on the bridge itself (binary\_sensor × 1, button × 4, fan × 3, light × 2, number × 36, select × 18, sensor × 36, switch × 33, text × 1, time × 20). Generated from the firmware discovery table by `scripts/gen_entity_docs.py`; do not edit by hand.
+**183 entities in total** — 153 per controller + 30 on the bridge itself (binary\_sensor × 3, button × 5, fan × 3, light × 2, number × 36, select × 21, sensor × 46, switch × 42, text × 5, time × 20). Generated from the firmware (`ha_discovery_table.c` and `ha_mqtt.c`) by `scripts/gen_entity_docs.py`; do not edit by hand.
 <!-- ENTITY-LIST:END -->
 </details>
 
@@ -381,17 +411,13 @@ below in full width, one under the other, and links to the unclipped original.
 <details>
 <summary><strong>About the counts</strong></summary>
 
-The 153 and 30 above are what Home Assistant shows on the two device pages, counted from the
-page's own shadow DOM. The entity table further up lists the 154 entries of the firmware
-discovery table in `firmware/ggs/main/ha_discovery_table.c` — 152 for the controller and 2
-that the bridge publishes under `spiderfarmer/bridge/…`.
-
-The two numbers answer different questions. The bridge publishes its own system entities
-(`spiderbridge_*`: time and NTP, device name, factory reset, internet access, firmware,
-memory, hotspot clients, uplink and uptime) directly from `ntp_server.c`, `time_sync.c`,
-`provisioning.c`, `config_portal.c` and `sb_system.c`, and those never pass through the
-discovery table. That is why the bridge device page shows 30 rows while the table counts 2 —
-the table is the controller's mirror, not the bridge's own feature list.
+The entity table above lists everything the firmware offers: 153 entities per controller and
+30 on the bridge, 183 in total. They match what Home Assistant shows on the two device pages
+below. The controller entities come from the discovery table in
+`firmware/ggs/main/ha_discovery_table.c`; the bridge's own entities (clock, time zone, network
+switches, uplink and hotspot diagnostics, restart, factory reset) are published by
+`publish_bridge_discovery()` in `firmware/ggs/main/ha_mqtt.c`. The two sensors *Bridge Free
+Memory* and *Bridge Firmware* come from the discovery table but belong to the bridge device.
 
 </details>
 
@@ -424,7 +450,7 @@ the table is the controller's mirror, not the bridge's own feature list.
 └────────────────────┘                   │  • web interface (Settings,   │
                                          │    Control, Status, Network,  │
         ┌────────────────────────┐       │    Log, Firmware)            │
-        │  Home Assistant        │       │  • MQTT Discovery, 154        │
+        │  Home Assistant        │       │  • MQTT Discovery, 183        │
         │  (auto-discovered      │◄──────│    entities                  │
         │   entities)            │ MQTT  └───────────────────────────────┘
         └────────────────────────┘
