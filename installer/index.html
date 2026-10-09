@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -24,10 +24,24 @@
   .btn{display:inline-block;background:#8ab4f8;color:#13151a;font-weight:600;
        padding:.5rem .9rem;border-radius:.3rem;text-decoration:none;margin:.2rem .4rem .2rem 0}
   .btn.ghost{background:transparent;color:#8ab4f8;border:1px solid #8ab4f8}
-  esp-web-install-button::part(button){width:100%}
+  button.act{font:inherit;font-weight:600;cursor:pointer;border:0;border-radius:.35rem;
+       background:#8ab4f8;color:#13151a;padding:.7rem 1.2rem;font-size:1rem}
+  button.act:hover{background:#a9c8fa}
+  button.act.alt{background:transparent;color:#8ab4f8;border:1px solid #8ab4f8}
+  .status{border-radius:.4rem;padding:.55rem .75rem;margin:.6rem 0;font-size:.9rem;display:none}
+  .status.show{display:block}
+  .status.warn{background:#3a2a12;border:1px solid #8a6a2a;color:#f0c674}
+  .status.err{background:#3a1717;border:1px solid #8a2f2f;color:#f2a1a1}
+  .status.ok{background:#12301f;border:1px solid #2f7a4a;color:#9fe0b4}
+  ul.tips{margin:.4rem 0;padding-left:1.2rem;font-size:.88rem;color:#aab0ba}
+  ul.tips li{margin:.25rem 0}
 </style>
-<script type="module" src="https://unpkg.com/esp-web-tools@10.0.3/dist/web/install-button.js"></script>
-<script type="module" src="https://unpkg.com/improv-wifi-serial-sdk@2/dist/web/serial-launch-button.js"></script>
+<!-- Pinned versions (verified to exist). jsDelivr is the primary CDN, unpkg the fallback;
+     see the loader script at the end of the page. -->
+<script type="module" src="https://cdn.jsdelivr.net/npm/esp-web-tools@10.4.0/dist/web/install-button.js"
+        onerror="window.__cdnFail=(window.__cdnFail||[]).concat('esp')"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/improv-wifi-serial-sdk@2.8.1/dist/web/serial-launch-button.js"
+        onerror="window.__cdnFail=(window.__cdnFail||[]).concat('improv')"></script>
 </head>
 <body>
 
@@ -37,12 +51,40 @@
 
 <div class="card">
   <h2>1 · Flash the firmware</h2>
-  <p>Connect the ESP32 board by USB (hold <strong>BOOT</strong> if the port does not appear),
-  choose the serial port and click install. The firmware targets
-  <strong>ESP32-WROOM-32 (4 MB)</strong> — developed and tested with
+  <p>The firmware targets <strong>ESP32-WROOM-32 (4 MB)</strong> — developed and tested with
   <a href="https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl" target="_blank" rel="noopener">this board</a>.</p>
-  <esp-web-install-button id="installBtn"></esp-web-install-button>
-  <p><small>The installer always uses the newest build of this repository.
+  <ol>
+    <li>Plug the ESP32 into this computer with a <strong>USB data cable</strong>
+        (a charge-only cable shows no port).</li>
+    <li>Click <strong>Connect &amp; flash</strong>. Chrome opens a window listing serial ports —
+        pick the ESP32 (<em>CP210x</em>, <em>CH340</em> or <em>USB JTAG/serial</em>) and press
+        <strong>Connect</strong>.</li>
+    <li>In the installer dialog press <strong>Install SpiderBridge</strong>, tick
+        <em>Erase device</em> for a first install, and confirm. Flashing takes about a minute —
+        keep this tab open.</li>
+  </ol>
+
+  <div id="statusBox" class="status"></div>
+
+  <esp-web-install-button id="installBtn">
+    <button slot="activate" type="button" class="act" id="flashBtn">Connect &amp; flash</button>
+    <span slot="unsupported" class="status warn show">This browser cannot flash over USB.
+      Open this page in <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>
+      on a desktop computer (Firefox, Safari and mobile browsers have no Web Serial).</span>
+    <span slot="not-allowed" class="status err show">Flashing needs a secure page. Open
+      <code>https://matthias1232.github.io/spider-farmer-homeassistant/installer/</code>.</span>
+  </esp-web-install-button>
+
+  <ul class="tips">
+    <li>No port in the list? Hold <strong>BOOT</strong> on the board while clicking
+        <em>Connect</em>, and try another cable or USB port.</li>
+    <li>On Windows the CP210x / CH340 driver may be needed
+        (<a href="https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers" target="_blank" rel="noopener">CP210x</a>,
+        <a href="https://www.wch-ic.com/downloads/CH341SER_EXE.html" target="_blank" rel="noopener">CH340</a>).</li>
+    <li>Close other programs that hold the port (Arduino IDE, serial monitors, other browser tabs).</li>
+  </ul>
+  <p><small>The installer always uses the newest build of this repository
+  (<a id="manifestLink" href="../manifest-ggs-esp32.json">manifest</a>).
   Alternatively join the hotspot <code>SpiderBridge</code> (password
   <code>12345678</code>, <code>http://192.168.10.1</code>) and configure Wi-Fi manually.</small></p>
 </div>
@@ -51,9 +93,14 @@
   <h2>2 · Send Wi-Fi credentials (during installation)</h2>
   <p>Immediately after flashing, the ESP32 stays in provisioning mode for
   <strong>5 minutes</strong>. Keep this tab open, enter your home Wi-Fi below and click
-  <strong>Connect</strong> — the credentials are sent to the ESP32 over the serial port
-  (Improv Serial, no cables swapped, no browser extensions).</p>
-  <improv-wifi-launch-button id="improvBtn"></improv-wifi-launch-button>
+  <strong>Send Wi-Fi to device</strong> — the credentials are sent to the ESP32 over the serial
+  port (Improv Serial, no cables swapped, no browser extensions). Chrome opens the port list again:
+  select the same ESP32.</p>
+  <improv-wifi-serial-launch-button id="improvBtn">
+    <button slot="activate" type="button" class="act alt">Send Wi-Fi to device</button>
+    <span slot="unsupported" class="status warn show">Use Google Chrome or Microsoft Edge on a desktop computer.</span>
+    <span slot="not-allowed" class="status err show">This needs an HTTPS page.</span>
+  </improv-wifi-serial-launch-button>
   <p><small>If the port disappears after flashing, close and reopen it — the Improv
   dialog needs the serial port itself. Without this step the bridge creates its own
   hotspot (<code>SpiderBridge</code>, password <code>12345678</code>) and you can
@@ -89,10 +136,61 @@
 </div>
 
 <script>
-  // Manifest always sits next to this page's parent directory (the site root).
-  var base = location.pathname.replace(/installer\/?$/, '');
-  var manifest = new URL('manifest-ggs-esp32.json', location.origin + base).href;
-  document.getElementById('installBtn').setAttribute('manifest', manifest);
+  // The manifest sits in the site root, one level above /installer/.
+  var manifest = new URL('../manifest-ggs-esp32.json', location.href).href;
+  var installBtn = document.getElementById('installBtn');
+  installBtn.setAttribute('manifest', manifest);
+  document.getElementById('manifestLink').href = manifest;
+
+  var box = document.getElementById('statusBox');
+  function show(kind, html) { box.className = 'status show ' + kind; box.innerHTML = html; }
+
+  // Load a web-component script from a fallback CDN when the primary one failed.
+  function loadFallback(src) {
+    var s = document.createElement('script');
+    s.type = 'module'; s.src = src; document.head.appendChild(s);
+  }
+
+  window.addEventListener('load', function () {
+    if (!window.isSecureContext) {
+      show('err', 'This page is not served over HTTPS, so the browser blocks USB access.');
+      return;
+    }
+    if (!('serial' in navigator)) {
+      show('warn', 'Your browser has no Web Serial support. Use <strong>Google Chrome</strong> or ' +
+                   '<strong>Microsoft Edge</strong> on a desktop computer.');
+      return;
+    }
+    if (window.__cdnFail && window.__cdnFail.indexOf('esp') !== -1) {
+      loadFallback('https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js');
+    }
+    if (window.__cdnFail && window.__cdnFail.indexOf('improv') !== -1) {
+      loadFallback('https://unpkg.com/improv-wifi-serial-sdk@2.8.1/dist/web/serial-launch-button.js');
+    }
+    // If the installer component still is not defined after a few seconds, say so
+    // instead of leaving an empty card.
+    setTimeout(function () {
+      if (!customElements.get('esp-web-install-button')) {
+        show('err', 'The installer component could not be loaded (CDN blocked?). ' +
+                    'Reload the page, disable content blockers for this site, or download ' +
+                    '<a href="../spiderbridge-ggs-esp32-factory.bin">the firmware .bin</a> and flash it ' +
+                    'at offset 0 with esptool.');
+      }
+    }, 5000);
+    // Check that the firmware the manifest points at is really there.
+    fetch(manifest, { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (m) {
+      var part = m.builds[0].parts[0].path;
+      return fetch(new URL(part, manifest).href, { method: 'HEAD', cache: 'no-store' }).then(function (r) {
+        if (!r.ok) throw new Error(part + ' HTTP ' + r.status);
+      });
+    }).catch(function (e) {
+      show('err', 'Firmware file not reachable (' + e.message + '). Flashing will fail until the ' +
+                  'site is redeployed.');
+    });
+  });
 </script>
 
 </body>
