@@ -6,6 +6,12 @@
     "targets": ["esp32"],
     "project_name": "spiderbridge_esp32_v2",
     "board": "ESP32-WROOM-32 (e.g. QIQIAZI NodeMCU ESP32, 4 MB)",
-    "flash": {"mode": "dio", "size": "4MB"}
+    "flash": {"mode": "dio", "size": "4MB"},
+    "modules": {
+      "esp32": {
+        "label": "ESP32 (WROOM-32 / WROVER / DevKitC / NodeMCU, 4 MB flash or more)",
+        "tested": "QIQIAZI NodeMCU ESP32-WROOM-32, 4 MB"
+      }
+    }
   }
 ]

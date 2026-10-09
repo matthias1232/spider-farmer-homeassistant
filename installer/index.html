@@ -33,6 +33,11 @@
   .status.warn{background:#3a2a12;border:1px solid #8a6a2a;color:#f0c674}
   .status.err{background:#3a1717;border:1px solid #8a2f2f;color:#f2a1a1}
   .status.ok{background:#12301f;border:1px solid #2f7a4a;color:#9fe0b4}
+  label.field{display:block;font-size:.85rem;color:#9aa0aa;margin:.6rem 0 .25rem}
+  select{width:100%;font:inherit;padding:.55rem .6rem;border-radius:.35rem;
+         background:#0f1116;color:#e6e6e6;border:1px solid #3a3f4b}
+  select:focus{outline:2px solid #8ab4f8;outline-offset:1px}
+  p.hint{font-size:.8rem;color:#7d848f;margin:.3rem 0 .8rem}
   ul.tips{margin:.4rem 0;padding-left:1.2rem;font-size:.88rem;color:#aab0ba}
   ul.tips li{margin:.25rem 0}
 </style>
@@ -51,13 +56,21 @@
 
 <div class="card">
   <h2>1 · Flash the firmware</h2>
-  <p>The firmware targets <strong>ESP32-WROOM-32 (4 MB)</strong> — developed and tested with
-  <a href="https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl" target="_blank" rel="noopener">this board</a>.</p>
+  <p>Developed and tested with
+  <a href="https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl" target="_blank" rel="noopener">this ESP32 board</a>.</p>
+
+  <label class="field" for="moduleSel">Module</label>
+  <select id="moduleSel" aria-describedby="moduleHint">
+    <option value="auto" selected>Auto-detect (recommended)</option>
+  </select>
+  <p id="moduleHint" class="hint">Auto-detect reads the chip after you connect and installs the
+  matching build. Pick a module only if you want to force one.</p>
+
   <ol>
-    <li>Plug the ESP32 into this computer with a <strong>USB data cable</strong>
+    <li>Plug the board into this computer with a <strong>USB data cable</strong>
         (a charge-only cable shows no port).</li>
     <li>Click <strong>Connect &amp; flash</strong>. Chrome opens a window listing serial ports —
-        pick the ESP32 (<em>CP210x</em>, <em>CH340</em> or <em>USB JTAG/serial</em>) and press
+        pick the board (<em>CP210x</em>, <em>CH340</em> or <em>USB JTAG/serial</em>) and press
         <strong>Connect</strong>.</li>
     <li>In the installer dialog press <strong>Install SpiderBridge</strong>, tick
         <em>Erase device</em> for a first install, and confirm. Flashing takes about a minute —
@@ -136,11 +149,57 @@
 </div>
 
 <script>
-  // The manifest sits in the site root, one level above /installer/.
-  var manifest = new URL('../manifest-ggs-esp32.json', location.href).href;
+  // Manifests sit in the site root, one level above /installer/. The module
+  // select box is filled from modules.json (written by CI for the targets that
+  // were really built). Without it we fall back to the single known build.
+  var FALLBACK_MANIFEST = 'manifest-ggs-esp32.json';
+  var manifest = new URL('../' + FALLBACK_MANIFEST, location.href).href;
   var installBtn = document.getElementById('installBtn');
+  var moduleSel = document.getElementById('moduleSel');
+  var firmware = null;       // entry of modules.json
   installBtn.setAttribute('manifest', manifest);
   document.getElementById('manifestLink').href = manifest;
+
+  function applySelection() {
+    var v = moduleSel.value;
+    var file = FALLBACK_MANIFEST;
+    if (firmware) {
+      if (v === 'auto') file = firmware.auto;
+      else {
+        var m = firmware.modules.filter(function (x) { return x.target === v; })[0];
+        file = m ? m.manifest : firmware.auto;
+      }
+    }
+    manifest = new URL('../' + file, location.href).href;
+    installBtn.setAttribute('manifest', manifest);
+    document.getElementById('manifestLink').href = manifest;
+    try { localStorage.setItem('sbModule', v); } catch (e) {}
+  }
+
+  fetch(new URL('../modules.json', location.href).href, { cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) {
+      firmware = d.firmwares[0];
+      firmware.modules.forEach(function (m) {
+        var o = document.createElement('option');
+        o.value = m.target;
+        o.textContent = m.label;
+        moduleSel.appendChild(o);
+      });
+      // With a single module "auto" and the module are the same build; say so.
+      if (firmware.modules.length === 1) {
+        document.getElementById('moduleHint').textContent =
+          'Currently one module is built: ' + firmware.modules[0].label +
+          '. More are added here automatically once they are built.';
+      }
+      var saved = null;
+      try { saved = localStorage.getItem('sbModule'); } catch (e) {}
+      if (saved && moduleSel.querySelector('option[value="' + saved + '"]')) moduleSel.value = saved;
+      applySelection();
+    })
+    .catch(function () { /* keep the fallback manifest; the select only offers auto-detect */ });
+
+  moduleSel.addEventListener('change', applySelection);
 
   var box = document.getElementById('statusBox');
   function show(kind, html) { box.className = 'status show ' + kind; box.innerHTML = html; }
@@ -177,20 +236,29 @@
                     'at offset 0 with esptool.');
       }
     }, 5000);
-    // Check that the firmware the manifest points at is really there.
-    fetch(manifest, { cache: 'no-store' }).then(function (r) {
+    checkFirmware();
+  });
+
+  // Check that every image the selected manifest points at is really there.
+  function checkFirmware() {
+    var mf = manifest;
+    fetch(mf, { cache: 'no-store' }).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     }).then(function (m) {
-      var part = m.builds[0].parts[0].path;
-      return fetch(new URL(part, manifest).href, { method: 'HEAD', cache: 'no-store' }).then(function (r) {
-        if (!r.ok) throw new Error(part + ' HTTP ' + r.status);
-      });
+      return Promise.all(m.builds.map(function (b) {
+        return fetch(new URL(b.parts[0].path, mf).href, { method: 'HEAD', cache: 'no-store' }).then(function (r) {
+          if (!r.ok) throw new Error(b.parts[0].path + ' HTTP ' + r.status);
+        });
+      }));
+    }).then(function () {
+      if (box.className.indexOf('err') !== -1 && box.textContent.indexOf('Firmware file') === 0) box.className = 'status';
     }).catch(function (e) {
       show('err', 'Firmware file not reachable (' + e.message + '). Flashing will fail until the ' +
                   'site is redeployed.');
     });
-  });
+  }
+  moduleSel.addEventListener('change', checkFirmware);
 </script>
 
 </body>

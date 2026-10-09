@@ -160,7 +160,9 @@ Three steps, no app and no cloud involved.
 ### 1. Flash the firmware (Wi-Fi credentials included)
 
 1. Open the [web installer](https://matthias1232.github.io/spider-farmer-homeassistant/installer/).
-2. Connect the ESP32 by USB and click **Connect** — the installer flashes the firmware.
+2. Connect the board by USB, leave **Module** on *Auto-detect* (or pick your module, like the board
+   list in Tasmota's installer) and click **Connect & flash**. Chrome opens its serial port list;
+   choose the board and press *Connect*, then *Install*.
 3. When prompted, enter your **home Wi-Fi SSID and password** — the Improv Serial
    provisioner sends them to the ESP32 right after flashing. (Alternatively you can join
    the `SpiderBridge` hotspot with password `12345678` and configure Wi-Fi at
@@ -168,6 +170,11 @@ Three steps, no app and no cloud involved.
 
 The build the installer uses is always the latest successful build from this repository —
 you can also build and flash any commit yourself (see *Build from source*).
+
+*Auto-detect* reads the chip family from the connected board and installs the matching build.
+The **Module** list only offers modules that were really built; today that is the classic
+**ESP32** (WROOM-32 / WROVER / DevKitC / NodeMCU, 4 MB flash or more). ESP32-S2/S3/C3/C6 boards
+are not supported yet, so the installer says so instead of flashing a wrong image.
 
 ### 2. Connect the bridge to Home Assistant
 
@@ -474,11 +481,13 @@ Memory* and *Bridge Firmware* come from the discovery table but belong to the br
 ## Build from source
 
 The repository is laid out for one directory per supported controller family, so more
-ESP32/ESP32-C6 firmwares can be added later. `firmware.json` describes what exists:
+firmwares can be added later. `firmware.json` describes what exists; every listed target
+is built by CI and shows up in the installer's **Module** list:
 
 ```json
 [
-  { "id": "ggs", "dir": "firmware/ggs", "targets": ["esp32"] }
+  { "id": "ggs", "dir": "firmware/ggs", "targets": ["esp32"],
+    "modules": { "esp32": { "label": "ESP32 (WROOM-32 / WROVER / DevKitC / NodeMCU)" } } }
 ]
 ```
 
