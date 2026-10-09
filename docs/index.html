@@ -42,7 +42,7 @@ nav .spacer{flex:1}
 section{padding:2.2rem 0;border-top:1px solid var(--line)}
 h2{font-size:1.35rem;margin:0 0 .4rem}
 .sub{color:var(--muted);margin:0 0 1.4rem}
-.strip{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.strip{display:grid;grid-template-columns:1fr;gap:1.5rem}
 figure{margin:0}
 figure img{border:1px solid var(--line);border-radius:var(--radius)}
 figcaption{color:var(--muted);font-size:.85rem;margin-top:.5rem;text-align:center}
@@ -70,11 +70,11 @@ figcaption{color:var(--muted);font-size:.85rem;margin-top:.5rem;text-align:cente
 footer{border-top:1px solid var(--line);padding:1.6rem 0 2.4rem;color:var(--muted);font-size:.9rem}
 footer p{margin:.3rem 0}
 @media (max-width:52rem){
-  .strip,.grid,.steps,.gallery{grid-template-columns:1fr 1fr}
+  .grid,.steps,.gallery{grid-template-columns:1fr 1fr}
   .hw{grid-template-columns:1fr}
 }
 @media (max-width:34rem){
-  .strip,.grid,.steps,.gallery{grid-template-columns:1fr}
+  .grid,.steps,.gallery{grid-template-columns:1fr}
   .hero h1{font-size:1.5rem}
 }
 </style>
@@ -110,18 +110,15 @@ footer p{margin:.3rem 0}
   targets, alarms, calibration and grow plan.</p>
   <div class="strip">
     <figure>
-      <img src="img/ha/devices.png" alt="Home Assistant devices and services showing SpiderBridge and the Grow Tent controller" loading="lazy">
-      <figcaption>Settings → Devices &amp; services</figcaption>
+      <img src="img/ha/controller-page.png" alt="The controller's complete device page in Home Assistant" loading="lazy">
+      <figcaption>The controller's full device page — all 153 entities, one image</figcaption>
     </figure>
     <figure>
-      <img src="img/ha/controller-full.png" alt="The controller's device page in Home Assistant" loading="lazy">
-      <figcaption>The controller as a native HA device</figcaption>
-    </figure>
-    <figure>
-      <img src="img/ha/controller-controls.png" alt="Controls card: fans, lights and outlets" loading="lazy">
-      <figcaption>Controls: fans, lights, outlets</figcaption>
+      <img src="img/ha/bridge-page.png" alt="The SpiderBridge device page in Home Assistant" loading="lazy">
+      <figcaption>The bridge's own device page — time, NTP, firmware, uplink</figcaption>
     </figure>
   </div>
+  <p class="sub">Both device pages are captured whole, one image each, top to bottom.</p>
 </section>
 
 <section>

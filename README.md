@@ -20,10 +20,14 @@
 [Supported ESP32 board (Amazon)](https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl)
 
 <p align="center">
-  <a href="docs/img/ha/devices.png"><img src="docs/img/ha/devices.png" alt="Home Assistant: Settings → Devices &amp; services, showing the SpiderBridge bridge and the grow controller" width="32%"></a>
-  <a href="docs/img/ha/controller-full.png"><img src="docs/img/ha/controller-full.png" alt="The grow controller as a native Home Assistant device" width="32%"></a>
-  <a href="docs/img/ha/controller-controls.png"><img src="docs/img/ha/controller-controls.png" alt="Controls card: circulation fan, exhaust fan, lights and outlets" width="32%"></a>
+  <a href="docs/img/ha/controller-page.png"><img src="docs/img/ha/controller-page.png" alt="The GGS controller's complete device page in Home Assistant — all 153 entities in one capture" width="100%"></a>
 </p>
+
+<p align="center">
+  <a href="docs/img/ha/bridge-page.png"><img src="docs/img/ha/bridge-page.png" alt="The SpiderBridge bridge's complete device page in Home Assistant — all 30 entities in one capture" width="100%"></a>
+</p>
+
+*Screenshots are from Home Assistant. Device and area names are demo names; the readings and timestamps are the values the bridge reported at capture time. Both device pages are captured whole — one image each, top to bottom — see the screenshot section.*
 
 ---
 
@@ -358,6 +362,51 @@ Grouped by function. *Kind*: Control = writable entity, Sensor = read-only.
 
 **154 entities in total** — 152 per controller + 2 on the bridge itself (binary\_sensor × 1, button × 4, fan × 3, light × 2, number × 36, select × 18, sensor × 36, switch × 33, text × 1, time × 20). Generated from the firmware discovery table by `scripts/gen_entity_docs.py`; do not edit by hand.
 <!-- ENTITY-LIST:END -->
+</details>
+
+<details>
+<summary><strong>Home Assistant screenshots</strong> — the complete device pages, entity by entity</summary>
+
+Each device page is captured in full — one image, top to bottom, nothing cut off. Counts vary with
+firmware versions and Home Assistant configuration.
+
+| | entities | complete page |
+|---|---|---|
+| **GGS controller** | 153 entities | [controller-page.png](docs/img/ha/controller-page.png) — 1915 × 9612 |
+| **SpiderBridge bridge** | 30 entities | [bridge-page.png](docs/img/ha/bridge-page.png) — 1918 × 2456 |
+
+Both complete pages are tall by definition, so they are the images worth looking at. Each is shown
+below in full width, one under the other, and links to the unclipped original.
+
+<details>
+<summary><strong>About the counts</strong></summary>
+
+The 153 and 30 above are what Home Assistant shows on the two device pages, counted from the
+page's own shadow DOM. The entity table further up lists the 154 entries of the firmware
+discovery table in `firmware/ggs/main/ha_discovery_table.c` — 152 for the controller and 2
+that the bridge publishes under `spiderfarmer/bridge/…`.
+
+The two numbers answer different questions. The bridge publishes its own system entities
+(`spiderbridge_*`: time and NTP, device name, factory reset, internet access, firmware,
+memory, hotspot clients, uplink and uptime) directly from `ntp_server.c`, `time_sync.c`,
+`provisioning.c`, `config_portal.c` and `sb_system.c`, and those never pass through the
+discovery table. That is why the bridge device page shows 30 rows while the table counts 2 —
+the table is the controller's mirror, not the bridge's own feature list.
+
+</details>
+
+**GGS controller — [controller-page.png](docs/img/ha/controller-page.png), all 153 entities in one image**
+
+<p align="center">
+  <a href="docs/img/ha/controller-page.png"><img src="docs/img/ha/controller-page.png" alt="The GGS controller's complete device page in Home Assistant, captured whole: fans, lights, outlets, sensors, alarms, calibration, plans and schedule entities" width="100%"></a>
+</p>
+
+**SpiderBridge — [bridge-page.png](docs/img/ha/bridge-page.png), all 30 entities in one image**
+
+<p align="center">
+  <a href="docs/img/ha/bridge-page.png"><img src="docs/img/ha/bridge-page.png" alt="The SpiderBridge bridge's complete device page in Home Assistant, captured whole: time sync, network, MQTT and diagnostics rows" width="100%"></a>
+</p>
+
 </details>
 
 ## How it works
