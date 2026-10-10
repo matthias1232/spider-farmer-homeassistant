@@ -36,3 +36,5 @@ firmware/ggs/host_test/improv_host_test
 firmware/ggs/host_test/improv_host_test.exe
 firmware/ggs/host_test/*.pdb
 firmware/ggs/host_test/*.o
+firmware/ggs/host_test/supervisor_host_test
+firmware/ggs/host_test/supervisor_host_test.exe

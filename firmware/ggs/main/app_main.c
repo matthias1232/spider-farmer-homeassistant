@@ -26,6 +26,7 @@
 #include "ip_filter.h"
 #include "sf_command_handler.h"
 #include "improv_serial.h"
+#include "supervisor.h"
 
 static const char *TAG = "app_main";
 
@@ -36,17 +37,28 @@ void app_main(void)
              app->version, app->idf_ver);
 
     esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
+    if (err != ESP_OK) {
+        // Any failure -- full, a newer layout, or a corrupted partition -- is answered the same way:
+        // erase and start clean. A bridge that aborts here restarts forever and can only be recovered
+        // by reflashing, which is exactly what must never be needed. The settings are lost; the
+        // hotspot with its default name comes up and the bridge can be configured again.
+        ESP_LOGE(TAG, "NVS init failed (%s) -- erasing the settings partition and starting clean", esp_err_to_name(err));
+        nvs_flash_erase();
         err = nvs_flash_init();
     }
     ESP_ERROR_CHECK(err);
+
+    // First after NVS: reads why the last run ended and counts restarts that did not end in a
+    // healthy run. After SV_LOOP_LIMIT of them the bridge starts in SAFE MODE (see supervisor.h):
+    // hotspot, web interface and USB console only, so whatever crashes it cannot start and it
+    // can still be reached, configured and updated.
+    bool safe_mode = sv_boot();
 
     // A requested GGS setup over Bluetooth runs in a boot of its own: no
     // Wi-Fi, no TLS, nothing else -- Bluetooth gets all the memory, does
     // its job and restarts the bridge into normal operation. On a normal
     // boot this releases every byte Bluetooth would have reserved.
-    if (ggs_ble_boot_check()) {
+    if (!safe_mode && ggs_ble_boot_check()) {
         sys_log_init();
         device_registry_init();   // names and the account uid for binding
         ggs_ble_run_boot();       // does not return
@@ -93,6 +105,21 @@ void app_main(void)
     // Wi-Fi setup from the web installer over USB (Improv serial), like
     // Tasmota. Started before the "not configured" early return below.
     improv_serial_start();
+
+    // From here on the supervisor watches for a hang that the hardware watchdogs cannot see.
+    sv_start();
+
+    if (safe_mode) {
+        // Hotspot, web interface and USB console are up. Nothing else starts: not the proxy, DNS,
+        // MQTT, Bluetooth or the update check. The bridge can be reached and fixed from here.
+        esp_ota_mark_app_valid_cancel_rollback();
+        ESP_LOGE(TAG, "========================================================");
+        ESP_LOGE(TAG, " SAFE MODE: the last %d starts ended in a crash or hang.", SV_LOOP_LIMIT);
+        ESP_LOGE(TAG, " Only the hotspot, the web interface and the USB console run.");
+        ESP_LOGE(TAG, " Update the firmware or restart the bridge from the web interface.");
+        ESP_LOGE(TAG, "========================================================");
+        return;
+    }
 
 
     // Confirms this boot to the bootloader's rollback mechanism.

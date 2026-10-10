@@ -27,6 +27,8 @@
 #include "provisioning.h"
 #include "device_registry.h"
 #include "ggs_ble.h"
+#include "supervisor.h"
+#include "esp_rom_sys.h"
 
 static const char *TAG = "ggs_ble";
 
@@ -1271,8 +1273,22 @@ bool ggs_ble_boot_check(void)
 
 bool ggs_ble_memory_released(void) { return s_released; }
 
+// The Bluetooth-only boot is a separate program run: if it stalls (a stack that never answers, a
+// connection that neither completes nor fails), nothing else will ever restart the chip into normal
+// operation. This one-shot timer does, whatever the Bluetooth code is doing.
+#define BLE_BOOT_MAX_S 150
+static void ble_boot_timeout(void *arg)
+{
+    esp_rom_printf("ggs_ble: Bluetooth boot did not finish in %d s -- restarting into normal operation\n", BLE_BOOT_MAX_S);
+    sv_restart(SV_WHY_BLE_TIMEOUT);
+}
+
 void ggs_ble_run_boot(void)
 {
+    static esp_timer_handle_t s_boot_guard;
+    esp_timer_create_args_t ga = { .callback = ble_boot_timeout, .name = "ble_guard" };
+    if (esp_timer_create(&ga, &s_boot_guard) == ESP_OK)
+        esp_timer_start_once(s_boot_guard, (uint64_t)BLE_BOOT_MAX_S * 1000000ull);
     op_t op = (op_t)s_rtc.op;
     // Cleared before anything can fail, so a crash in Bluetooth cannot
     // loop the bridge in Bluetooth boots: the next boot is a normal one.
@@ -1344,8 +1360,10 @@ void ggs_ble_run_boot(void)
     blog_save();
     ESP_LOGW(TAG, "Bluetooth boot done -- restarting into normal operation");
     vTaskDelay(pdMS_TO_TICKS(300));
-    esp_restart();
+    sv_restart(SV_WHY_NONE);
 }
+
+static void ble_request_restart(void *arg) { (void)arg; sv_restart(SV_WHY_NONE); }
 
 static bool request(op_t op, const char *addr, uint32_t delay_ms)
 {
@@ -1367,9 +1385,9 @@ static bool request(op_t op, const char *addr, uint32_t delay_ms)
     // Restart from a timer so the web request that asked for it still
     // gets its reply.
     esp_timer_handle_t t;
-    esp_timer_create_args_t a = { .callback = (esp_timer_cb_t)esp_restart, .name = "ble_rst" };
+    esp_timer_create_args_t a = { .callback = ble_request_restart, .name = "ble_rst" };
     if (esp_timer_create(&a, &t) != ESP_OK || esp_timer_start_once(t, (uint64_t)delay_ms * 1000) != ESP_OK) {
-        esp_restart();
+        sv_restart(SV_WHY_NONE);
     }
     return true;
 }

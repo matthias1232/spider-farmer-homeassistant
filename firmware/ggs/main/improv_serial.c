@@ -15,6 +15,7 @@
 #include "wifi_apsta.h"
 #include "improv_serial.h"
 #include "ggs_ble.h"
+#include "supervisor.h"
 
 static const char *TAG = "improv";
 
@@ -30,7 +31,9 @@ enum { CMD_WIFI = 0x01, CMD_STATE = 0x02, CMD_INFO = 0x03, CMD_SCAN = 0x04,
        CMD_X_AP_PASS = 0x41,   // [pass] ("" = random) -> hotspot password
        CMD_X_WIFI_AP = 0x42,   // [ssid][pass][ap pass][quick] join + hotspot password
                                // optional last string "1" = quick connect, see below
-       CMD_X_BLE     = 0x43 }; // -> Bluetooth side: armed flag, last result, controllers found
+       CMD_X_BLE     = 0x43, // -> Bluetooth side: armed flag, last result, controllers found
+       CMD_X_RESTART = 0x44, // restart the bridge (answers first)
+       CMD_X_DIAG    = 0x45 }; // -> why it last restarted, restart counters, heap, uptime
 enum { ST_READY = 0x02, ST_PROVISIONING = 0x03, ST_PROVISIONED = 0x04 };
 enum { ERR_NONE = 0x00, ERR_INVALID = 0x01, ERR_UNKNOWN_CMD = 0x02,
        ERR_CONNECT = 0x03, ERR_UNKNOWN = 0xFF };
@@ -124,7 +127,7 @@ static void restart_soon(void)
 {
     ESP_LOGW(TAG, "Hotspot password changed -- restarting to apply it");
     vTaskDelay(pdMS_TO_TICKS(2500));
-    esp_restart();
+    sv_restart(SV_WHY_USER);
 }
 
 static void handle_ap_pass(const uint8_t *a, uint8_t alen)
@@ -225,6 +228,44 @@ static void handle_ble(void)
     free(b);
 }
 
+// Restart on request. Answers first, so the installer knows it was accepted, then restarts.
+static void handle_restart(void)
+{
+    const char *s[] = { "1" };
+    send_result(CMD_X_RESTART, s, 1);
+    ESP_LOGW(TAG, "Restart requested over USB");
+    vTaskDelay(pdMS_TO_TICKS(400));
+    sv_restart(SV_WHY_USER);
+}
+
+// What an owner needs to know about a bridge that "restarted by itself", and what the installer shows as
+// diagnostics. Strings, in order:
+//   0 reset reason of this start ("Power on", "Task watchdog", ...)   6 task the supervisor restarted
+//   1 starts since the last factory reset                                     for, "" when none
+//   2 restarts in a row without a healthy run (3 = safe mode)         7 uptime in seconds
+//   3 crashes and watchdog resets in total                            8 free heap in bytes
+//   4 "1" when running in SAFE MODE, else "0"                         9 lowest free heap since start
+//   5 why the supervisor itself last restarted (number, 0 = never)   10 largest free block
+static void handle_diag(void)
+{
+    sv_info_t *i = calloc(1, sizeof(*i));
+    if (!i) { send_error(ERR_UNKNOWN); return; }
+    sv_get_info(i);
+    char boots[12], streak[12], crashes[12], why[12], up[12], hf[12], hm[12], hl[12];
+    snprintf(boots, sizeof(boots), "%u", (unsigned)i->boots);
+    snprintf(streak, sizeof(streak), "%u", (unsigned)i->crash_streak);
+    snprintf(crashes, sizeof(crashes), "%u", (unsigned)i->crashes);
+    snprintf(why, sizeof(why), "%d", (int)i->last_sv_why);
+    snprintf(up, sizeof(up), "%u", (unsigned)i->uptime_s);
+    snprintf(hf, sizeof(hf), "%u", (unsigned)i->heap_free);
+    snprintf(hm, sizeof(hm), "%u", (unsigned)i->heap_min);
+    snprintf(hl, sizeof(hl), "%u", (unsigned)i->heap_largest);
+    const char *s[] = { i->reset_text, boots, streak, crashes, i->safe_mode ? "1" : "0", why,
+                        i->last_sv_task, up, hf, hm, hl };
+    send_result(CMD_X_DIAG, s, 11);
+    free(i);
+}
+
 static void handle_rpc(const uint8_t *d, uint8_t len)
 {
     if (len < 2 || d[1] != len - 2) { send_error(ERR_INVALID); return; }
@@ -235,6 +276,8 @@ static void handle_rpc(const uint8_t *d, uint8_t len)
     switch (cmd) {
     case CMD_X_NETINFO: handle_netinfo(); break;
     case CMD_X_BLE:     handle_ble(); break;
+    case CMD_X_RESTART: handle_restart(); break;
+    case CMD_X_DIAG:    handle_diag(); break;
     case CMD_X_AP_PASS: handle_ap_pass(a, alen); break;
     case CMD_X_WIFI_AP: handle_wifi_ap(a, alen); break;
     case CMD_STATE: {
@@ -313,7 +356,7 @@ static void handle_rpc(const uint8_t *d, uint8_t len)
         if (!was_configured) {
             ESP_LOGI(TAG, "First home network set -- restarting to start all services");
             vTaskDelay(pdMS_TO_TICKS(3000));
-            esp_restart();
+            sv_restart(SV_WHY_USER);
         }
         break;
     }
@@ -322,21 +365,22 @@ static void handle_rpc(const uint8_t *d, uint8_t len)
     }
 }
 
-// Memory matters: the task and the UART driver cost ~5 KB, which the TLS
-// sessions need. So the listener runs only while it can be useful -- the
-// installer talks to the device right after flashing (unconfigured) or
-// right after a reset/plug-in -- and then frees everything.
-#define IMPROV_WINDOW_MS (5 * 60 * 1000)
+// The listener runs for as long as the bridge runs. The USB console and the installer must always get an
+// answer -- after a flash, after a restart, after a watchdog reset -- so nothing here ever switches it off.
+// It costs about 4.5 KB (task stack plus the UART buffer); the idle heap of a bridge with a controller
+// connected is ~80 KB against the 56 KB a new TLS session needs, so the margin is kept.
+#define IMPROV_PERIOD_S 5
 
 static void improv_task(void *arg)
 {
-    bool forever = (bool)(intptr_t)arg;
     uint8_t buf[9 + 255 + 1];
     int n = 0;
-    TickType_t until = xTaskGetTickCount() + pdMS_TO_TICKS(IMPROV_WINDOW_MS);
+    // A command can take a while (joining Wi-Fi: up to ~25 s), so the supervisor's patience for this
+    // task is 6 x 5 s + 30 s.
+    int hb = sv_register("improv", IMPROV_PERIOD_S);
     for (;;) {
         uint8_t c;
-        if (!forever && (int32_t)(xTaskGetTickCount() - until) >= 0) break;
+        sv_beat(hb);
         if (uart_read_bytes(UART_PORT, &c, 1, pdMS_TO_TICKS(1000)) != 1) continue;
         // Sync on "IMPROV": anything else on the line is ignored.
         if (n < 6) {
@@ -355,15 +399,10 @@ static void improv_task(void *arg)
         n = 0;
         if (!ok) { send_error(ERR_INVALID); continue; }
         if (type == T_RPC) {
-            // Someone is using the installer: keep the window open while they do.
-            until = xTaskGetTickCount() + pdMS_TO_TICKS(IMPROV_WINDOW_MS);
             handle_rpc(buf + 9, len);
+            sv_beat(hb);
         }
     }
-    uart_driver_delete(UART_PORT);
-    ESP_LOGI(TAG, "Serial Wi-Fi setup (Improv) closed after %d min -- memory released",
-             IMPROV_WINDOW_MS / 60000);
-    vTaskDelete(NULL);
 }
 
 void improv_serial_start(void)
@@ -378,23 +417,10 @@ void improv_serial_start(void)
         ESP_LOGW(TAG, "Serial Wi-Fi setup (Improv) not available");
         return;
     }
-    // A configured bridge needs the listener only right after flashing or
-    // a plug-in: 5 minutes. But its ~5 KB are the margin the controller's
-    // first TLS handshake needs, so on a configured bridge it is skipped
-    // when a controller is already known -- the installer is used before
-    // any controller exists.
-    if (configured && device_registry_count() > 0) {
-        uart_driver_delete(UART_PORT);
-        ESP_LOGI(TAG, "Serial Wi-Fi setup (Improv) off: bridge configured and controllers known");
-        return;
-    }
-    if (xTaskCreate(improv_task, "improv", 3584, (void *)(intptr_t)!configured, 3, NULL) != pdPASS) {
+    if (xTaskCreate(improv_task, "improv", 3584, NULL, 3, NULL) != pdPASS) {
         uart_driver_delete(UART_PORT);
         return;
     }
-    if (configured)
-        ESP_LOGI(TAG, "Serial Wi-Fi setup (Improv) ready on the USB port for %d minutes",
-                 IMPROV_WINDOW_MS / 60000);
-    else
-        ESP_LOGI(TAG, "Serial Wi-Fi setup (Improv) ready on the USB port (no home network yet)");
+    ESP_LOGI(TAG, "Serial Wi-Fi setup (Improv) ready on the USB port%s",
+             configured ? "" : " (no home network yet)");
 }

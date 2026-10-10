@@ -256,3 +256,52 @@ CONFIG_HTTPD_MAX_URI_LEN=1024
 # detected". The struct was moved to the heap as well, so this is
 # headroom rather than the fix.
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# --- Hang and crash recovery: the device must always come back on its own ---
+#
+# "Pull the plug" must never be the way to restart. Three independent layers,
+# each of which ends in a reboot without any help from the application:
+#
+#  1. Task watchdog (5 s): the idle tasks of BOTH cores must run. A task that
+#     spins at high priority starves them; the panic below reboots.
+#  2. Interrupt watchdog (300 ms): interrupts disabled for too long (a driver
+#     or a spinlock stuck on the other core) cannot be caught by a task.
+#  3. RTC watchdog in the ROM bootloader: if the second stage bootloader or
+#     the app start never reaches app_main, the chip resets itself.
+# Any panic (crash, abort, stack overflow, watchdog) prints and REBOOTS.
+CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_ESP_TASK_WDT_INIT=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=8
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=y
+CONFIG_ESP_INT_WDT=y
+CONFIG_ESP_INT_WDT_TIMEOUT_MS=800
+CONFIG_ESP_INT_WDT_CHECK_CPU1=y
+CONFIG_BOOTLOADER_WDT_ENABLE=y
+CONFIG_BOOTLOADER_WDT_DISABLE_IN_USER_CODE=n
+CONFIG_BOOTLOADER_WDT_TIME_MS=9000
+
+# A stack overflow ends in a panic (and so a reboot) instead of silent
+# memory corruption. Canary check at every context switch costs a few cycles.
+CONFIG_FREERTOS_CHECK_STACKOVERFLOW_CANARY=y
+
+# A brown-out (weak USB port or cable) resets the chip cleanly instead of
+# letting it run on corrupted registers. Level 0 (about 2.43 V) is the IDF
+# default; the higher levels trip at up to 2.80 V and would reset a board on
+# an ordinary weak USB port for no reason.
+CONFIG_ESP_BROWNOUT_DET=y
+CONFIG_ESP_BROWNOUT_DET_LVL_SEL_0=y
+
+# Heap integrity: a corrupted heap block is a panic and a reboot, not a
+# random hang later on. Light checking only (no per-allocation poisoning).
+CONFIG_HEAP_POISONING_DISABLED=y
+CONFIG_HEAP_ABORT_WHEN_ALLOCATION_FAILS=n
+
+# After a panic the chip restarts at once; core dump to flash is off (the
+# 4 MB layout has no room for it).
+CONFIG_ESP_COREDUMP_ENABLE_TO_NONE=y
+
+# Faster recovery: do not wait for a UART flush that nobody reads.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200

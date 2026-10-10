@@ -6,6 +6,7 @@
 // Replies are also written to fixtures.json so the installer's JavaScript
 // test can parse the exact bytes the firmware produces.
 #include <assert.h>
+#include <setjmp.h>
 #include <stdlib.h>
 #include <string.h>
 #include "esp_stub.h"
@@ -14,8 +15,10 @@
 #include "device_registry.h"
 #include "improv_serial.h"
 #include "ggs_ble.h"
+#include "supervisor.h"
 
 // ---- fake hardware -------------------------------------------------------
+static jmp_buf g_end;          // the task never returns on its own: the fake UART (no more input) or sv_restart() ends it
 static uint8_t g_rx[2048]; static size_t g_rx_n, g_rx_pos;   // host -> device
 static uint8_t g_tx[8192]; static size_t g_tx_n;             // device -> host
 static int g_restarts;
@@ -31,6 +34,14 @@ TickType_t xTaskGetTickCount(void) { return (TickType_t)g_ticks++; }
 void vTaskDelay(TickType_t t) { (void)t; }
 void vTaskDelete(void *h) { (void)h; }
 void esp_restart(void) { g_restarts++; }
+static int g_sv_why = -1;
+// sv_restart() never returns on the device. The stub ends the run the same way: it jumps out of the task.
+void sv_restart(sv_why_t why) { g_restarts++; g_sv_why = (int)why; longjmp(g_end, 2); }
+static int g_slots;
+int sv_register(const char *n, uint32_t p) { (void)n; (void)p; return g_slots++; }
+void sv_beat(int s) { (void)s; }
+static sv_info_t g_sv;
+void sv_get_info(sv_info_t *o) { *o = g_sv; }
 static void (*g_task)(void *); static void *g_task_arg;
 int xTaskCreate(void (*f)(void *), const char *n, int s, void *a, int p, void *h)
 { (void)n; (void)s; (void)p; (void)h; g_task = f; g_task_arg = a; return pdPASS; }
@@ -43,7 +54,7 @@ int uart_write_bytes(uart_port_t p, const char *b, size_t n)
 int uart_read_bytes(uart_port_t p, void *b, uint32_t n, TickType_t t)
 {
     (void)p; (void)n; (void)t;
-    if (g_rx_pos >= g_rx_n) { g_ticks += 400000u; return 0; }   // idle -> window expires
+    if (g_rx_pos >= g_rx_n) longjmp(g_end, 1);                 // no more input: stop the (endless) task
     *(uint8_t *)b = g_rx[g_rx_pos++]; return 1;
 }
 const esp_app_desc_t *esp_app_get_description(void)
@@ -105,7 +116,7 @@ static void run(const uint8_t *pkt, size_t n)
     memcpy(g_rx, pkt, n); g_rx_n = n; g_rx_pos = 0; g_tx_n = 0;
     improv_serial_start();
     assert(g_task);
-    g_task(g_task_arg);
+    if (setjmp(g_end) == 0) g_task(g_task_arg);
 }
 
 // Last RPC_RESULT frame for cmd -> its strings. Returns count.
@@ -149,7 +160,7 @@ static int failures;
 static void reset_world(bool connect_ok)
 {
     memset(&g_cfg, 0, sizeof(g_cfg)); strcpy(g_cfg.sta_ssid, "OldNet"); strcpy(g_cfg.ap_ssid, "SpiderBridge"); g_saved = false; g_restarts = 0;
-    g_auto_ble = false; memset(&g_ble, 0, sizeof(g_ble));
+    g_auto_ble = false; memset(&g_ble, 0, sizeof(g_ble)); g_sv_why = -1; memset(&g_sv, 0, sizeof(g_sv));
     g_stored_ap_pass[0] = 0; g_joined_ssid[0] = 0; g_connect_ok = connect_ok; g_task = NULL; g_ticks = 0;
 }
 
@@ -307,6 +318,34 @@ int main(void)
     g_ble.scanned = false; g_ble.count = 3;
     n = put_rpc(pkt, 0x43, NULL, 0); run(pkt, n);
     CHECK(result_strings(0x43, r) == 3); CHECK(!strcmp(r[2], "0"));
+
+    // 21) restart command: answers first, then restarts through the supervisor
+    reset_world(true);
+    n = put_rpc(pkt, 0x44, NULL, 0); run(pkt, n);
+    CHECK(result_strings(0x44, r) == 1); CHECK(!strcmp(r[0], "1")); CHECK(g_restarts == 1); CHECK(g_sv_why == SV_WHY_USER); fixture("restart");
+
+    // 22) diagnostics: a bridge that last crashed because of a watchdog, 2 restarts in a row
+    reset_world(true);
+    strcpy(g_sv.reset_text, "Task watchdog"); g_sv.boots = 17; g_sv.crash_streak = 2; g_sv.crashes = 5; g_sv.safe_mode = false;
+    g_sv.last_sv_why = SV_WHY_HEARTBEAT; strcpy(g_sv.last_sv_task, "config_poll");
+    g_sv.uptime_s = 3600; g_sv.heap_free = 91234; g_sv.heap_min = 61000; g_sv.heap_largest = 40960;
+    n = put_rpc(pkt, 0x45, NULL, 0); run(pkt, n);
+    CHECK(result_strings(0x45, r) == 11);
+    CHECK(!strcmp(r[0], "Task watchdog")); CHECK(!strcmp(r[1], "17")); CHECK(!strcmp(r[2], "2")); CHECK(!strcmp(r[3], "5"));
+    CHECK(!strcmp(r[4], "0")); CHECK(!strcmp(r[5], "1")); CHECK(!strcmp(r[6], "config_poll"));
+    CHECK(!strcmp(r[7], "3600")); CHECK(!strcmp(r[8], "91234")); CHECK(!strcmp(r[9], "61000")); CHECK(!strcmp(r[10], "40960"));
+    CHECK(g_restarts == 0); fixture("diag");
+
+    // 23) diagnostics in safe mode
+    reset_world(true);
+    strcpy(g_sv.reset_text, "Crash"); g_sv.crash_streak = 3; g_sv.safe_mode = true;
+    n = put_rpc(pkt, 0x45, NULL, 0); run(pkt, n);
+    CHECK(result_strings(0x45, r) == 11); CHECK(!strcmp(r[4], "1")); CHECK(!strcmp(r[2], "3")); fixture("diag_safe");
+
+    // 24) the listener registers one heartbeat and never ends on its own: after the last byte it just waits
+    reset_world(true); g_slots = 0;
+    n = put_rpc(pkt, 0x02, NULL, 0); run(pkt, n);
+    CHECK(g_slots == 1);
     fprintf(fx, "}\n"); fclose(fx);
     if (failures) { printf("%d FAILURE(S)\n", failures); return 1; }
     printf("ALL host tests passed\n");

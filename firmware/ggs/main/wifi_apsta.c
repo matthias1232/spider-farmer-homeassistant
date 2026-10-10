@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 #include "esp_wifi.h"
+#include "supervisor.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_mac.h"
@@ -596,7 +597,7 @@ static void connection_watchdog(void)
             ESP_LOGE(TAG, "Uplink down for %d s after %d attempts — restarting",
                      down_seconds, s_reconnect_attempts);
             vTaskDelay(pdMS_TO_TICKS(500));
-            esp_restart();
+            sv_restart(SV_WHY_UPLINK);
         }
 
         // Every third check, tear the station interface down and bring it

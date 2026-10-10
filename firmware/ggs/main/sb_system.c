@@ -4,6 +4,7 @@
 
 #include "esp_log.h"
 #include "esp_system.h"
+#include "supervisor.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "cJSON.h"
@@ -38,7 +39,7 @@ static void reboot_task(void *arg)
     vTaskDelay(pdMS_TO_TICKS((int)(intptr_t)arg));
     device_registry_flush();   // a just-made rename is on flash before the restart
     ESP_LOGI(TAG, "Restarting now");
-    esp_restart();
+    sv_restart(SV_WHY_USER);
 }
 
 void sb_system_reboot(int delay_ms)

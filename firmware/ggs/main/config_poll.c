@@ -4,6 +4,7 @@
 
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "supervisor.h"
 #include "esp_random.h"
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
@@ -241,9 +242,11 @@ static void poll_task(void *arg)
 {
     int elapsed = 0;
     int cal_elapsed = 0;
+    int hb = sv_register("config_poll", 1);
 
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(1000));
+        sv_beat(hb);
         elapsed++;
         cal_elapsed++;
         run_hooks();

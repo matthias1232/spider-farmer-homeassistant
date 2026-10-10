@@ -39,3 +39,5 @@ int uart_read_bytes(uart_port_t p, void *b, uint32_t n, TickType_t t);
 bool uart_is_driver_installed(uart_port_t p);
 esp_err_t uart_driver_install(uart_port_t p, int a, int b, int c, void *d, int e);
 esp_err_t uart_driver_delete(uart_port_t p);
+
+typedef enum { ESP_RST_UNKNOWN, ESP_RST_POWERON, ESP_RST_EXT, ESP_RST_SW, ESP_RST_PANIC, ESP_RST_INT_WDT, ESP_RST_TASK_WDT, ESP_RST_WDT, ESP_RST_DEEPSLEEP, ESP_RST_BROWNOUT } esp_reset_reason_t;

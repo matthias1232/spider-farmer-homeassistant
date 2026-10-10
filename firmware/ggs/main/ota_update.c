@@ -3,6 +3,7 @@
 
 #include "esp_log.h"
 #include "esp_ota_ops.h"
+#include "supervisor.h"
 #include "esp_app_format.h"
 #include "esp_app_desc.h"
 #include "esp_system.h"
@@ -35,7 +36,7 @@ static void restart_task(void *arg)
     vTaskDelay(pdMS_TO_TICKS(delay_ms));
     device_registry_flush();
     ESP_LOGI(TAG, "Restarting now");
-    esp_restart();
+    sv_restart(SV_WHY_USER);
 }
 
 static void restart_in(int delay_ms)

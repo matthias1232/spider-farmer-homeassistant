@@ -36,6 +36,8 @@ idf_component_register(
         "web_auth.c"
         "control_page.c"
         "improv_serial.c"
+        "supervisor.c"
+        "supervisor_logic.c"
         "plan_text.c"
         "plan_templates.c"
         "plan_store.c"

@@ -28,6 +28,7 @@
 #include "status_page.h"
 #include "nav.h"
 #include "ggs_ble.h"
+#include "supervisor.h"
 
 static const char STATUS_PAGE[] =
 "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">"
@@ -225,6 +226,10 @@ static const char STATUS_PAGE_BODY[] =
 "h+=row('Lowest ever',Math.round(S.heap_min/1024)+' KB',"
 "S.heap_min<25000?'warn':'');"
 "h+=row('Restart reason',S.reset_reason);"
+"if(S.boots!==undefined)h+=row('Starts / crashes',S.boots+' / '+S.crashes,S.crashes>0?'warn':'');"
+"if(S.crash_streak>0)h+=row('Restarts without a healthy run',S.crash_streak+' of 3','warn');"
+"if(S.sv_why)h+=row('Last self-restart',['','a task stopped responding','memory ran low','Bluetooth step stalled','requested','uplink was down'][S.sv_why]+(S.sv_task?' ('+S.sv_task+')':''),'warn');"
+"if(S.safe_mode)h+=row('Mode','SAFE MODE: the last starts ended in a crash. Only hotspot, web interface and USB run. Update the firmware or restart from here.','bad');"
 "h+='</fieldset>';"
 // --- Bluetooth ---
 "if(S.ble){const b=S.ble;h+='<fieldset><legend>Bluetooth</legend>';"
@@ -515,6 +520,19 @@ static esp_err_t status_data_impl(httpd_req_t *req)
         }
     }
     cJSON_AddStringToObject(root, "reset_reason", reset_reason_text());
+    {
+        sv_info_t *si = calloc(1, sizeof(*si));
+        if (si) {
+            sv_get_info(si);
+            cJSON_AddNumberToObject(root, "boots", si->boots);
+            cJSON_AddNumberToObject(root, "crashes", si->crashes);
+            cJSON_AddNumberToObject(root, "crash_streak", si->crash_streak);
+            cJSON_AddBoolToObject(root, "safe_mode", si->safe_mode);
+            cJSON_AddNumberToObject(root, "sv_why", (int)si->last_sv_why);
+            cJSON_AddStringToObject(root, "sv_task", si->last_sv_task);
+            free(si);
+        }
+    }
     {
         ggs_ble_status_t *bs = malloc(sizeof(*bs));
         cJSON *jb = cJSON_AddObjectToObject(root, "ble");
