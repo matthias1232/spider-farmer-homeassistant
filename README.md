@@ -193,10 +193,35 @@ Three steps, no app and no cloud involved.
 > their own. Hold the **BOOT** button while you press *Install* (or *Select board & start*) and
 > release it when the progress bar starts.
 
+### The bridge always comes back on its own
+
+Pulling the power plug must never be the way to restart it. Several independent layers each end in a restart without
+anybody's help, and the USB console keeps answering throughout:
+
+- **Hardware watchdogs**: the task watchdog (8 s, both cores), the interrupt watchdog (800 ms) and the bootloader
+  watchdog. Any crash, stack overflow or watchdog ends in a restart.
+- **Supervisor** (`firmware/ggs/main/supervisor.c`): core tasks report in regularly; one that stops (a deadlock, a socket
+  call that never returns) restarts the bridge, as does a memory leak (free heap under 20 KB for 90 s). A restart that
+  hangs is forced after 4 s. The Bluetooth-only start has its own 150 s guard timer.
+- **Boot loop protection**: three restarts in a row that did not end in 2 minutes of healthy running start the bridge in
+  **safe mode** (hotspot, web interface and USB console only; nothing that crashed it runs), where it can still be
+  reached, configured and updated. A restart or update by the owner ends safe mode.
+- **A bad update cannot stick**: the previous firmware is restored if the new one does not start; the Bluetooth-only start
+  that every boot begins with used to undo every update and no longer does.
+- **The USB console never switches off.** After a flash, a restart or a crash it answers again; the installer's live
+  console reconnects by itself.
+- **It tells you what happened**: the reason of the last restart, the number of starts and crashes, and (for restarts the
+  bridge decided on itself) the reason, on the status page and in the installer (*Health & restarts*).
+
+This is tested on a real board, not only on paper: `python scripts/reboot_soak.py COM3 --mode fault` makes the bridge
+crash, hang a task, starve both watchdogs and leak memory on purpose, checks that it recovers by itself each time, then
+crashes it three times in a row to check safe mode and that a restart leaves it. `--cycles 30 --mode command` restarts it
+30 times and checks the answer time and the memory each time (about 11 s each, memory unchanged).
+
 The wizard's extra commands (IP addresses, hotspot password, quick connect) are SpiderBridge extensions of
-[Improv Wi-Fi Serial](https://www.improv-wifi.com/serial/) (commands `0x40`–`0x43`, see
+[Improv Wi-Fi Serial](https://www.improv-wifi.com/serial/) (commands `0x40`–`0x46`, see
 `firmware/ggs/main/improv_serial.c`); other Improv clients ignore them. The firmware side is covered by a
-host test (`python firmware/ggs/host_test/run.py`) and the installer by `node tests/installer_quickconnect.test.mjs`;
+host test (`python firmware/ggs/host_test/run.py`) and the installer by `node tests/installer_quickconnect.test.mjs` and `node tests/installer_console.test.mjs`;
 both run in CI before the firmware is built.
 The build the installer uses is always the latest successful build from this repository —
 you can also build and flash any commit yourself (see *Build from source*).

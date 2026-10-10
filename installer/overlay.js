@@ -18,7 +18,7 @@
   'use strict';
 
   var SVG_NS = 'http://www.w3.org/2000/svg';
-  var CMD = { NETINFO: 0x40, AP_PASS: 0x41, WIFI_AP: 0x42 };
+  var CMD = { NETINFO: 0x40, AP_PASS: 0x41, WIFI_AP: 0x42, RESTART: 0x44, DIAG: 0x45 };
   var TIMEOUT = { net: 8000, pass: 15000, wifi: 45000, scan: 20000 };
 
   var ICONS = {
@@ -27,7 +27,9 @@
           'M7.5,6.5A1.5,1.5 0 1,0 7.5,9.5A1.5,1.5 0 1,0 7.5,6.5Z' +
           'M16.5,14.5A1.5,1.5 0 1,0 16.5,17.5A1.5,1.5 0 1,0 16.5,14.5Z' +
           'M12,10.5A1.5,1.5 0 1,0 12,13.5A1.5,1.5 0 1,0 12,10.5Z',
-    info: 'M12,2A10,10 0 1,0 12,22A10,10 0 1,0 12,2Z M11,10H13V17H11Z M11,7H13V9H11Z'
+    info: 'M12,2A10,10 0 1,0 12,22A10,10 0 1,0 12,2Z M11,10H13V17H11Z M11,7H13V9H11Z',
+    heart: 'M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.04L12,21.35Z',
+    restart: 'M12,4V1L8,5L12,9V6A6,6 0 0,1 18,12C18,13 17.75,13.97 17.3,14.8L18.76,16.26C19.54,15.03 20,13.57 20,12A8,8 0 0,0 12,4M12,18A6,6 0 0,1 6,12C6,11 6.25,10.03 6.7,9.2L5.24,7.74C4.46,8.97 4,10.43 4,12A8,8 0 0,0 12,20V23L16,19L12,15V18Z'
   };
 
   var ERRORS = {
@@ -189,6 +191,51 @@
       setLines(item.sbSupport, [k === 'UNKNOWN_RPC_COMMAND'
         ? 'Not available on this firmware version. Install the latest SpiderBridge firmware to see the addresses here.'
         : 'Could not read the addresses (' + explain(e) + '). Click to retry.']);
+    });
+  }
+
+  // ---- health: why did it restart, how often ------------------------------
+  var SV_TEXT = ['', 'a task stopped responding', 'memory ran low', 'a Bluetooth step stalled', 'restart requested', 'the uplink was down'];
+
+  function renderDiag(item, r) {
+    var up = parseInt(r[7], 10) || 0;
+    var upTxt = up >= 3600 ? Math.floor(up / 3600) + ' h ' + Math.floor((up % 3600) / 60) + ' min'
+              : up >= 60 ? Math.floor(up / 60) + ' min ' + (up % 60) + ' s' : up + ' s';
+    var crashes = parseInt(r[3], 10) || 0, streak = parseInt(r[2], 10) || 0, safe = r[4] === '1';
+    var lines = [];
+    if (safe) lines.push('SAFE MODE: the last ' + streak + ' starts ended in a crash. Only the hotspot, web interface and this console run. ' +
+                         'Install the firmware again or use "Restart the board".');
+    lines.push('This start: ' + r[0] + ' · up ' + upTxt + ' · start #' + r[1]);
+    lines.push('Crashes and watchdog resets so far: ' + crashes + (streak ? ' · ' + streak + ' in a row without a healthy run' : ''));
+    var why = parseInt(r[5], 10) || 0;
+    if (why) lines.push('Last time the board restarted itself because ' + (SV_TEXT[why] || 'of an internal check') + (r[6] ? ' (' + r[6] + ')' : ''));
+    lines.push('Free memory ' + Math.round(r[8] / 1024) + ' KB · lowest ' + Math.round(r[9] / 1024) + ' KB · largest block ' + Math.round(r[10] / 1024) + ' KB');
+    setLines(item.sbSupport, lines);
+  }
+
+  function loadDiag(client, item) {
+    setLines(item.sbSupport, ['Reading…']);
+    rpc(client, CMD.DIAG, [], TIMEOUT.net).then(function (r) {
+      if (!r || r.length < 11) throw new Error('UNKNOWN_ERROR');
+      renderDiag(item, r);
+    }).catch(function (e) {
+      var k = typeof e === 'string' ? e : (e && e.message);
+      setLines(item.sbSupport, [k === 'UNKNOWN_RPC_COMMAND'
+        ? 'This firmware is older than the health report. Install the current firmware.'
+        : 'Could not read it (' + explain(e) + '). Click to retry.']);
+    });
+  }
+
+  function restartBoard(client, diagItem) {
+    setLines(diagItem.sbSupport, ['Restarting the board…']);
+    rpc(client, CMD.RESTART, [], TIMEOUT.net).then(function () {
+      // It answers first, then restarts about 0.4 s later. Read the health again once it is back.
+      setLines(diagItem.sbSupport, ['The board is restarting (about 15 seconds). Click here afterwards to see the result.']);
+    }).catch(function (e) {
+      var k = typeof e === 'string' ? e : (e && e.message);
+      setLines(diagItem.sbSupport, [k === 'UNKNOWN_RPC_COMMAND'
+        ? 'This firmware cannot be restarted from here. Press the board\'s reset button, or install the current firmware.'
+        : 'Could not restart it (' + explain(e) + ').']);
     });
   }
 
@@ -371,8 +418,8 @@
 
     if (client === null) {                   // no Improv answer: foreign or idle firmware
       list.insertBefore(makeItem(icon(ICONS.info), 'Wi-Fi, hotspot password & IP addresses',
-        'Available once SpiderBridge firmware answers over USB. Right after flashing it does; later only for 5 minutes ' +
-        'after power-up and only while no controller is known — press the board\'s reset button and reconnect.',
+        'The board did not answer over USB. SpiderBridge firmware always answers; if this is a SpiderBridge, press its ' +
+        'reset button, wait 15 seconds and reconnect. Other firmware: use Install to put SpiderBridge on it.',
         function () {}), logs);
       return;
     }
@@ -381,6 +428,12 @@
     var net = makeItem(icon(ICONS.info), 'IP addresses & status', '', function () { loadNet(client, net, true); });
     var anchor = items[0] && items[0].nextSibling;
     list.insertBefore(net, anchor || logs);
+
+    var diagItem = makeItem(icon(ICONS.heart), 'Health & restarts', 'Click to read why the board last restarted, how often, and its memory',
+      function () { loadDiag(client, diagItem); });
+    list.insertBefore(diagItem, logs);
+    list.insertBefore(makeItem(icon(ICONS.restart), 'Restart the board',
+      'Restarts it cleanly; the console reconnects by itself', function () { restartBoard(client, diagItem); }), logs);
 
     var wifiIcon = null;
     items.forEach(function (i) { if (/^(Connect to|Change) Wi-Fi$/.test(headline(i)) && i.querySelector('svg')) wifiIcon = i.querySelector('svg'); });

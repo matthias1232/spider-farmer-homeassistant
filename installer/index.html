@@ -44,6 +44,13 @@
   .sbq-steps span.cur{border-color:#8ab4f8;color:#8ab4f8}
   .sbq-steps span.done{border-color:#2f7a4a;color:#9fe0b4}
   .sbq-note{font-size:.8rem;color:#7d848f;margin:.2rem 0 .6rem}
+  .sbc-bar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5rem 0}
+  .sbc-bar button.act{padding:.45rem .8rem;font-size:.9rem}
+  .sbc-bar button:disabled{opacity:.45;cursor:default}
+  .sbc-status{font-size:.85rem;color:#9aa0aa;margin-left:.3rem}
+  .sbc-status.connected{color:#9fe0b4}.sbc-status.lost,.sbc-status.paused{color:#f0c674}
+  .sbc-out{height:16rem;min-height:8rem;resize:vertical}
+  .sbc-report{font-size:.85rem;color:#c9ced6;margin:.3rem 0}
   .btnrow{display:flex;gap:.6rem;flex-wrap:wrap}
   .btnrow button{flex:1 1 16rem}
   .sbq-log{max-height:12rem;overflow:auto;background:#0f1116;border:1px solid #2c303a;padding:.5rem;font-size:.72rem;white-space:pre-wrap}
@@ -56,6 +63,7 @@
         onerror="window.__cdnFail=(window.__cdnFail||[]).concat('esp')"></script>
 <script src="overlay.js" defer></script>
 <script src="quickconnect.js" defer></script>
+<script src="console.js" defer></script>
 <script type="module" src="https://cdn.jsdelivr.net/npm/improv-wifi-serial-sdk@2.8.1/dist/web/serial-launch-button.js"
         onerror="window.__cdnFail=(window.__cdnFail||[]).concat('improv')"></script>
 </head>
@@ -84,8 +92,8 @@
     <button type="button" class="act alt" id="quickSetupBtn">⚡ Quick Connect — board already flashed: set up only</button>
   </p>
   <p class="hint">Already running SpiderBridge? Use the second button: nothing is flashed, the board is just restarted and
-  configured. It works on a freshly flashed board, and on any board that has not met a controller yet. A bridge that is
-  already in use deliberately stops listening for USB commands; the wizard tells you and offers to reinstall.</p>
+  configured. This works on every SpiderBridge with current firmware, new or in use: its USB console never switches
+  off, and a board that does not answer is explained (older firmware, other firmware, silent) with a way forward.</p>
 
   <p><strong>Or step by step / manage a board that is already set up</strong> (IP addresses, single Wi-Fi or password changes, console):</p>
   <ol>
@@ -128,10 +136,10 @@
 
 <div class="card">
   <h2>2 · Wi-Fi without Quick Connect</h2>
-  <p>Right after flashing, and for 5 minutes after every power-up, the ESP32 accepts Wi-Fi settings over
-  USB. Click <strong>Send Wi-Fi to device</strong> here, or use the same entry in the installer window
-  (it also offers <em>Connect Wi-Fi &amp; randomize SpiderBridge Wi-Fi password</em>). Chrome opens the
-  port list again: select the same ESP32.</p>
+  <p>The ESP32 accepts Wi-Fi settings over USB at any time, also after a restart or a crash: its USB console never
+  switches off. Click <strong>Send Wi-Fi to device</strong> here, or use the same entry in the installer window
+  (it also offers <em>Connect Wi-Fi &amp; randomize SpiderBridge Wi-Fi password</em>, <em>IP addresses &amp; status</em>,
+  <em>Health &amp; restarts</em> and <em>Restart the board</em>). Chrome opens the port list again: select the same ESP32.</p>
   <improv-wifi-serial-launch-button id="improvBtn">
     <button slot="activate" type="button" class="act alt">Send Wi-Fi to device</button>
     <span slot="unsupported" class="status warn show">Use Google Chrome or Microsoft Edge on a desktop computer.</span>
@@ -144,7 +152,18 @@
 </div>
 
 <div class="card">
-  <h2>3 · What happens next</h2>
+  <h2>3 · Live console</h2>
+  <p>Shows what the board prints, and keeps showing it: after a flash, a restart, a crash or when you unplug the
+  cable and plug it back in, the console reconnects <strong>by itself</strong>. Click <em>Connect console</em> once and
+  choose the port; Chrome remembers it. While the installer window or Quick Connect uses the port, the console steps
+  aside and comes back afterwards.</p>
+  <div id="consoleRoot"></div>
+  <p class="hint">Only one program can use the serial port at a time. If the console says <em>busy</em>, close other tabs,
+  the Arduino IDE or serial monitors.</p>
+</div>
+
+<div class="card">
+  <h2>4 · What happens next</h2>
   <ol>
     <li>The bridge joins your network — open its web interface
         (hostname <code>spiderbridge.local</code> or its IP from your router).</li>
@@ -223,6 +242,22 @@
     .catch(function () { /* keep the fallback manifest; the select only offers auto-detect */ });
 
   moduleSel.addEventListener('change', applySelection);
+
+  // Live console: mounted once, then it keeps itself connected (console.js).
+  window.addEventListener('load', function () {
+    var root = document.getElementById('consoleRoot');
+    if (window.SBConsole && root) window.SBConsole.mount(root);
+  });
+  // The ESP Web Tools window needs the port for itself: the console pauses while it is open.
+  (function () {
+    var open = false;
+    function sync() {
+      var now = !!document.querySelector('ewt-install-dialog');
+      if (now && !open) { open = true; if (window.SBConsole) window.SBConsole.pause(); }
+      else if (!now && open) { open = false; if (window.SBConsole) window.SBConsole.resume(); }
+    }
+    new MutationObserver(sync).observe(document.body, { childList: true });
+  })();
 
   // Quick Connect wizard (installer/quickconnect.js). Always uses the auto-detect manifest when
   // available, so the chip decides which build is flashed, unless a module was picked.

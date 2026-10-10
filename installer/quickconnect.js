@@ -66,8 +66,8 @@
         'ticked: that removes the settings and the known controllers, and Quick Connect then works.' };
     }
     if (seen.ready || seen.app) {
-      return { code: 'NO_ANSWER', detail: 'The board runs SpiderBridge but did not answer. It listens for 5 minutes after power-up: press its ' +
-        'reset button, wait about 20 seconds and try again.' };
+      return { code: 'NO_ANSWER', detail: 'The board runs SpiderBridge but did not answer. It always listens, so this is unusual: press its ' +
+        'reset button, wait about 20 seconds and try again. If it keeps happening, open "Health & restarts" in the installer window.' };
     }
     if (t.replace(/\s+/g, '').length > 20) {
       return { code: 'FOREIGN_FIRMWARE', detail: 'The board is running other firmware (it printed text, but nothing from SpiderBridge). ' +
@@ -285,6 +285,8 @@
     var flashMode = options.mode !== 'setup';   // false: the board already runs SpiderBridge, do not flash
     var d = document.createElement('dialog');
     d.className = 'sbo sbq';
+    // The live console must let go of the port while the wizard uses it.
+    if (window.SBConsole) window.SBConsole.pause();
     var h2 = el('h2', null, 'Quick Connect'); var head = el('div', 'sbo-head'); head.appendChild(h2);
     var bar = el('div', 'sbq-steps'); head.appendChild(bar);
     function paintBar() { bar.textContent = ''; (flashMode ? STEPS_FULL : STEPS_SET).forEach(function (s, i) { bar.appendChild(el('span', null, (i + 1) + ' ' + s)); }); h2.textContent = flashMode ? 'Quick Connect — install & set up' : 'Quick Connect — set up (no flashing)'; }
@@ -293,7 +295,7 @@
     d.appendChild(head); d.appendChild(body); d.appendChild(actions);
     var busy = false, port = null;
     d.addEventListener('cancel', function (e) { if (busy) e.preventDefault(); });
-    d.addEventListener('close', function () { d.remove(); });
+    d.addEventListener('close', function () { d.remove(); if (window.SBConsole) window.SBConsole.resume(); });
     document.body.appendChild(d);
 
     function mark(n) { Array.prototype.forEach.call(bar.children, function (c, i) { c.className = i < n ? 'done' : i === n ? 'cur' : ''; }); }
@@ -481,6 +483,7 @@
 
   window.SBQuickConnect = {
     open: open,
+    ImprovLink: ImprovLink,
     _test: { randomHotspotPassword: randomHotspotPassword, ImprovLink: ImprovLink, enc: enc, CMD: CMD, diagnose: diagnose }
   };
 })();

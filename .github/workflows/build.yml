@@ -40,7 +40,9 @@ jobs:
         run: |
           node --check installer/overlay.js
           node --check installer/quickconnect.js
+          node --check installer/console.js
           node tests/installer_quickconnect.test.mjs
+          node tests/installer_console.test.mjs
 
   discover:
     runs-on: ubuntu-latest
