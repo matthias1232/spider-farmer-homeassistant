@@ -10,6 +10,7 @@
 #include "esp_rom_sys.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "lwip/sockets.h"
 #include "nvs.h"
 
 #include "supervisor.h"
@@ -171,13 +172,54 @@ void sv_get_info(sv_info_t *out)
     out->heap_largest = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
 }
 
+// The web interface is the one part of the bridge that can stop answering while every task still runs (the
+// server's socket slots or its task, see config_portal.c). The check is a real request to the bridge's own
+// status page over loopback, once a minute. Three failures in a row restart the bridge: one slow reply is not
+// a reason to.
+#define WEB_PROBE_EVERY_S 60
+#define WEB_PROBE_FAILS   3
+
+static bool web_probe(void)
+{
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return false;
+    struct timeval tv = { .tv_sec = 5, .tv_usec = 0 };
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    struct sockaddr_in a = { .sin_family = AF_INET, .sin_port = htons(80) };
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    bool ok = false;
+    if (connect(fd, (struct sockaddr *)&a, sizeof(a)) == 0) {
+        static const char req[] = "GET /status/data HTTP/1.0\r\nHost: local\r\n\r\n";
+        char buf[16];
+        int n = send(fd, req, sizeof(req) - 1, 0) > 0 ? recv(fd, buf, sizeof(buf), 0) : -1;
+        ok = n >= 12 && memcmp(buf, "HTTP/1.", 7) == 0;
+    }
+    close(fd);
+    return ok;
+}
+
 static void supervisor_task(void *arg)
 {
     uint32_t low_since = 0;
+    uint32_t web_next = SV_HEALTHY_S;     // no probe during the first minutes, the server is still starting
+    int web_fails = 0;
     bool healthy_marked = false;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(5000));
         uint32_t t = now_s();
+
+        if (t >= web_next) {
+            web_next = t + WEB_PROBE_EVERY_S;
+            if (web_probe()) {
+                web_fails = 0;
+            } else if (++web_fails >= WEB_PROBE_FAILS) {
+                ESP_LOGE(TAG, "Web interface did not answer %d times in a row -- restarting", web_fails);
+                sv_restart(SV_WHY_WEB);
+            } else {
+                ESP_LOGW(TAG, "Web interface did not answer (%d of %d)", web_fails, WEB_PROBE_FAILS);
+            }
+        }
 
         if (!healthy_marked && t >= SV_HEALTHY_S) {
             healthy_marked = true;

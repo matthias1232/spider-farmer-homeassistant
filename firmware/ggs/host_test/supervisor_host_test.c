@@ -36,6 +36,7 @@ int main(void)
     CHECK(sv_why_is_unhealthy(SV_WHY_HEARTBEAT));
     CHECK(sv_why_is_unhealthy(SV_WHY_LOW_HEAP));
     CHECK(sv_why_is_unhealthy(SV_WHY_BLE_TIMEOUT));
+    CHECK(sv_why_is_unhealthy(SV_WHY_WEB));
     CHECK(!sv_why_is_unhealthy(SV_WHY_USER));
     CHECK(!sv_why_is_unhealthy(SV_WHY_UPLINK));
     CHECK(!sv_why_is_unhealthy(SV_WHY_NONE));

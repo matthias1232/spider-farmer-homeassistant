@@ -38,6 +38,7 @@ typedef enum {
     SV_WHY_BLE_TIMEOUT,   // the Bluetooth-only boot did not finish
     SV_WHY_USER,          // restart requested over USB or the web interface
     SV_WHY_UPLINK,        // uplink down for too long (wifi_apsta.c)
+    SV_WHY_WEB,           // the web interface stopped answering its own status request
 } sv_why_t;
 
 // First thing in app_main(), before anything can fail. Reads the reset reason,

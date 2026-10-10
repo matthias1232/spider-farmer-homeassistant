@@ -23,6 +23,7 @@ bool sv_why_is_unhealthy(sv_why_t why)
     case SV_WHY_HEARTBEAT:     // a core task was stuck
     case SV_WHY_LOW_HEAP:      // a leak
     case SV_WHY_BLE_TIMEOUT:   // the Bluetooth boot stalled
+    case SV_WHY_WEB:           // the web interface stopped answering
         return true;
     default:                   // user, uplink outage, none
         return false;
