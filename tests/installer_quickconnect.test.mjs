@@ -71,7 +71,7 @@ function link(replyHex, onWrite) {
   check(r.length === 10 && r[0] === 'HomeNet' && r[1] === '192.168.1.77' && r[4] === '192.168.10.1' && r[9] === '0.0.0+test', 'netinfo: 10 strings');
 
   r = await link(fixtures.ble_found).call(CMD.BLE, [], 1000);
-  check(r[0] === '1' && r[2] === '2' && r[3] === 'AA:BB:CC:00:11:22|SF-GGS-1A|-61', 'ble_found: armed flag and controller list');
+  check(r[0] === '1' && r[2] === '2' && r[3] === 'AA:BB:CC:00:11:22|SF-GGS-1A|-61|-1' && r[4] === 'AA:BB:CC:00:11:33|SF-GGS-2B|-78|3', 'ble_found: armed flag and controller list with address, name, rssi and flags');
   r = await link(fixtures.ble_empty).call(CMD.BLE, [], 1000);
   check(r[0] === '0' && r[2] === '0' && r.length === 3, 'ble_empty: not armed, none found');
 }

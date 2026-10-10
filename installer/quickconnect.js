@@ -8,7 +8,7 @@
  *   4. optionally search for Spider Farmer GGS controllers on the first start and connect them
  *
  * Flashing uses esptool-js (the library ESP Web Tools is built on). Step 3 and 4 use
- * SpiderBridge's Improv extensions (firmware/ggs/main/improv_serial.c, commands 0x40..0x43),
+ * SpiderBridge's Improv extensions (firmware/ggs/main/improv_serial.c, commands 0x40..0x49),
  * through improv-wifi-serial-sdk-compatible packets written by this file itself so it does
  * not depend on any private API of the other installer window.
  *
