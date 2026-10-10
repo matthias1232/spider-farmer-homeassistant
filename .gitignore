@@ -30,3 +30,9 @@ Thumbs.db
 
 # Local list of values that must never be captured into the demo
 scripts/private_values.txt
+
+# Host test build output (firmware/ggs/host_test)
+firmware/ggs/host_test/improv_host_test
+firmware/ggs/host_test/improv_host_test.exe
+firmware/ggs/host_test/*.pdb
+firmware/ggs/host_test/*.o

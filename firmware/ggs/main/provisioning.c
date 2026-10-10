@@ -514,34 +514,67 @@ void sb_prov_ensure_ap_pass(void)
     sb_prov_new_ap_pass();
 }
 
-void sb_prov_new_ap_pass(void)
+void sb_prov_random_ap_pass(char *out, size_t n)
 {
     // 15 characters from 64 symbols = 90 bits: the same shape as the
     // password set by hand on the reference bridge. esp_random() is a
     // hardware RNG once the radio has run; the bootloader seeds it too.
     static const char SET[] =
         "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789#!";
-    char pw[16];
-    const size_t n = sizeof(SET) - 1;
+    if (!out || n < 16) { if (out && n) out[0] = '\0'; return; }
+    const size_t m = sizeof(SET) - 1;
     bool lo, up, dg, sy;
     do {
         lo = up = dg = sy = false;
         for (int i = 0; i < 15; i++) {
-            char c = SET[esp_random() % n];
-            pw[i] = c;
+            char c = SET[esp_random() % m];
+            out[i] = c;
             if (c >= 'a' && c <= 'z') lo = true;
             else if (c >= 'A' && c <= 'Z') up = true;
             else if (c >= '0' && c <= '9') dg = true;
             else sy = true;
         }
-        pw[15] = '\0';
+        out[15] = '\0';
     } while (!(lo && up && dg && sy));
+}
 
+bool sb_prov_store_ap_pass(const char *pw)
+{
+    // WPA2 needs 8..63 characters; anything shorter would silently turn
+    // the hotspot into an open network (see wifi_apsta.c).
+    if (!pw || strlen(pw) < 8 || strlen(pw) > 63) return false;
+    nvs_handle_t h;
+    if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) return false;
+    esp_err_t e = nvs_set_str(h, "ap_pass", pw);
+    if (e == ESP_OK) e = nvs_commit(h);
+    nvs_close(h);
+    return e == ESP_OK;
+}
+
+bool sb_prov_auto_ble(void)
+{
+    nvs_handle_t h;
+    uint8_t v = 0;
+    if (nvs_open(NVS_NS, NVS_READONLY, &h) != ESP_OK) return false;
+    nvs_get_u8(h, "autoble", &v);
+    nvs_close(h);
+    return v != 0;
+}
+
+void sb_prov_set_auto_ble(bool on)
+{
     nvs_handle_t h;
     if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) return;
-    nvs_set_str(h, "ap_pass", pw);
+    nvs_set_u8(h, "autoble", on ? 1 : 0);
     nvs_commit(h);
     nvs_close(h);
+}
+
+void sb_prov_new_ap_pass(void)
+{
+    char pw[16];
+    sb_prov_random_ap_pass(pw, sizeof(pw));
+    if (!sb_prov_store_ap_pass(pw)) { memset(pw, 0, sizeof(pw)); return; }
     memset(pw, 0, sizeof(pw));
     ESP_LOGW(TAG, "New hotspot password generated -- shown on the settings page");
 }

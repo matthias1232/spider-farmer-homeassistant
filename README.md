@@ -159,15 +159,34 @@ Three steps, no app and no cloud involved.
 
 ### 1. Flash the firmware (Wi-Fi credentials included)
 
-1. Open the [web installer](https://matthias1232.github.io/spider-farmer-homeassistant/installer/).
-2. Connect the board by USB, leave **Module** on *Auto-detect* (or pick your module, like the board
-   list in Tasmota's installer) and click **Connect & flash**. Chrome opens its serial port list;
-   choose the board and press *Connect*, then *Install*.
-3. When prompted, enter your **home Wi-Fi SSID and password** — the Improv Serial
-   provisioner sends them to the ESP32 right after flashing. (Alternatively you can join
-   the `SpiderBridge` hotspot with password `12345678` and configure Wi-Fi at
-   `http://192.168.10.1`.)
+1. Open the [web installer](https://matthias1232.github.io/spider-farmer-homeassistant/installer/)
+   in **Chrome or Edge** on a desktop computer and plug the board in with a USB *data* cable.
+2. **New board: click "⚡ Quick Connect".** Enter your home Wi-Fi and press *Select board & start*;
+   Chrome opens its serial port list, you choose the board, and the wizard then
+   - installs the newest firmware (erasing the board first, if you leave that ticked),
+   - joins your home Wi-Fi,
+   - gives the bridge's own hotspot a **new random password** (shown once at the end: write it down),
+   - and, if the Bluetooth box is ticked, makes the bridge **search for your Spider Farmer GGS
+     controller on its first start and connect it to the hotspot**. The controller stays visible over
+     Bluetooth, so you can still pair your phone and use the Spider Farmer app afterwards. Only
+     controllers heard clearly (stronger than −75 dBm) are touched, and the switch is used up after
+     that one start.
+3. **Already flashed, or want single steps:** click *Open installer & device tools*. The window it opens
+   offers *Install*, *IP addresses & status* (home network, hotspot, gateway, signal),
+   *Send Wi-Fi to device*, *Connect Wi-Fi & randomize SpiderBridge Wi-Fi password*,
+   *Randomize SpiderBridge Wi-Fi password* and *Logs & Console*. (You can also join the
+   `SpiderBridge` hotspot and configure Wi-Fi at `http://192.168.10.1`.)
+4. Leave **Module** on *Auto-detect* (or pick your module, like the board list in Tasmota's installer).
 
+> **Install fails with "Failed to initialize"?** Many ESP32 boards cannot enter download mode on
+> their own. Hold the **BOOT** button while you press *Install* (or *Select board & start*) and
+> release it when the progress bar starts.
+
+The wizard's extra commands (IP addresses, hotspot password, quick connect) are SpiderBridge extensions of
+[Improv Wi-Fi Serial](https://www.improv-wifi.com/serial/) (commands `0x40`–`0x43`, see
+`firmware/ggs/main/improv_serial.c`); other Improv clients ignore them. The firmware side is covered by a
+host test (`python firmware/ggs/host_test/run.py`) and the installer by `node tests/installer_quickconnect.test.mjs`;
+both run in CI before the firmware is built.
 The build the installer uses is always the latest successful build from this repository —
 you can also build and flash any commit yourself (see *Build from source*).
 

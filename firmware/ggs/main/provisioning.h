@@ -196,6 +196,22 @@ void sb_prov_save(const sb_prov_cfg_t *cfg);
 // bridges share the built-in default.
 void sb_prov_new_ap_pass(void);
 
+// Generates a random hotspot password into out (15 characters plus the
+// terminator, so n must be at least 16). Does not store anything.
+void sb_prov_random_ap_pass(char *out, size_t n);
+
+// One-shot "quick connect" switch, set by the web installer. While it is set,
+// the next start-up Bluetooth scan also sends this bridge's hotspot Wi-Fi to
+// every GGS controller it finds (and leaves them visible to phones). It is
+// cleared at the start of that scan, so a failure can never repeat on its own.
+bool sb_prov_auto_ble(void);
+void sb_prov_set_auto_ble(bool on);
+
+// Stores only the hotspot password (8..63 characters, WPA2). The hotspot
+// picks it up on the next start. Returns false for an invalid password or
+// a storage error.
+bool sb_prov_store_ap_pass(const char *pw);
+
 // Same, but only when no hotspot password is stored yet (first boot after
 // flashing an erased chip). Call once after nvs_flash_init().
 void sb_prov_ensure_ap_pass(void);

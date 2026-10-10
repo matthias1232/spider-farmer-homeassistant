@@ -23,6 +23,25 @@ permissions:
   id-token: write
 
 jobs:
+  # Host tests: the Improv serial handlers (installer protocol, including the
+  # quick-connect and hotspot-password commands) are compiled for the PC and run
+  # against byte-exact packets; the installer's JavaScript is then tested against
+  # the replies the firmware code really produced. No board or ESP-IDF needed.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Firmware protocol tests (host)
+        run: python3 firmware/ggs/host_test/run.py
+      - name: Installer protocol tests
+        run: |
+          node --check installer/overlay.js
+          node --check installer/quickconnect.js
+          node tests/installer_quickconnect.test.mjs
+
   discover:
     runs-on: ubuntu-latest
     outputs:
@@ -56,7 +75,7 @@ jobs:
           echo "Building: $matrix"
 
   build:
-    needs: discover
+    needs: [discover, test]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

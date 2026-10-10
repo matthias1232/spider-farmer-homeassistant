@@ -975,8 +975,10 @@ static void pid_for_target(char *out, size_t n)
              (unsigned)(m >> 16) & 0xFF, (unsigned)(m >> 8) & 0xFF, (unsigned)m & 0xFF);
 }
 
-static void do_provision(void)
+// Returns true when the controller accepted the Wi-Fi settings.
+static bool do_provision(void)
 {
+    bool accepted = false;
     sb_prov_cfg_t *p = malloc(sizeof(*p));
     char *json = malloc(400);
     if (!p || !json) {
@@ -1039,6 +1041,7 @@ static void do_provision(void)
         set_result("%s refused the Wi-Fi settings (code %d)", s_target, code);
         goto out;
     }
+    accepted = true;
     blog("setWifi accepted. The controller stores the network and joins it; polling its "
          "status (getSysSta -> data.sys.wifi.isConnect) until it reports the link, at most 30 s.");
 
@@ -1115,6 +1118,55 @@ done:
     free(s_acc); s_acc = NULL; s_acc_n = 0;
     if (p) memset(p, 0, sizeof(*p));
     free(p); free(json);
+    return accepted;
+}
+
+// Quick connect: after the start-up scan, put every GGS controller that was
+// found onto this bridge's hotspot. The installer switches it on for the
+// first start after flashing. It is cleared FIRST, so whatever happens below
+// (crash, no controller, refusal) the next start is a normal one.
+//
+// Controllers stay visible over Bluetooth (no setDevActive), so the phone app
+// can still pair with them afterwards. Only controllers heard clearly are
+// touched: a faint one is probably a neighbour's, and re-pointing somebody
+// else's controller at this hotspot would cut it off from its own network.
+// -75 dBm is "in the same room or the next one".
+#define AUTO_MIN_RSSI (-75)
+static void auto_pair_found(void)
+{
+    if (!sb_prov_auto_ble()) return;
+    sb_prov_set_auto_ble(false);
+
+    char addrs[GGS_BLE_MAX_FOUND][18];
+    int n = 0;
+    lock();
+    for (int i = 0; i < s_st.count && n < GGS_BLE_MAX_FOUND; i++) {
+        if (s_st.dev[i].rssi < AUTO_MIN_RSSI) continue;
+        strncpy(addrs[n], s_st.dev[i].addr, sizeof(addrs[n]) - 1);
+        addrs[n][sizeof(addrs[n]) - 1] = '\0';
+        n++;
+    }
+    unlock();
+
+    blog("Quick connect (first start after the installer): %d GGS controller(s) in range", n);
+    if (n == 0) {
+        set_result("Quick connect: no GGS controller found in range. Put it in pairing mode (not paired "
+                   "with a phone) and use \"Scan\" on the bridge's Control page");
+        return;
+    }
+    s_rtc.bind = 0;            // keep them visible over Bluetooth
+    int ok = 0;
+    char last[160] = "";
+    for (int i = 0; i < n; i++) {
+        strncpy(s_target, addrs[i], sizeof(s_target) - 1);
+        s_target[sizeof(s_target) - 1] = '\0';
+        trace("quick connect %d/%d: %s", i + 1, n, s_target);
+        if (do_provision()) ok++;
+        strncpy(last, s_st.last_result, sizeof(last) - 1);
+        last[sizeof(last) - 1] = '\0';
+    }
+    set_result("Quick connect: %d of %d controller(s) connected to the hotspot, still visible over Bluetooth. %s",
+               ok, n, ok ? "" : last);
 }
 
 // Unpair over Bluetooth: setDevDeactive. Used when the controller is not
@@ -1258,6 +1310,18 @@ void ggs_ble_run_boot(void)
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
             if (op == OP_SCAN) {
                 do_scan();
+                if (s_boot_scan && sb_prov_auto_ble()) {
+                    char keep[160];
+                    auto_pair_found();
+                    strncpy(keep, s_st.last_result, sizeof(keep) - 1);
+                    keep[sizeof(keep) - 1] = '\0';
+                    // A fresh scan afterwards, so the page shows the new state.
+                    vTaskDelay(pdMS_TO_TICKS(500));
+                    s_scan_s = 6;
+                    blog("Scanning again so the settings page shows the new state ...");
+                    do_scan();
+                    set_result("%s", keep);
+                }
             } else {
                 if (op == OP_UNPAIR) do_unpair();
                 else do_provision();

@@ -14,6 +14,7 @@
 #include "device_registry.h"
 #include "wifi_apsta.h"
 #include "improv_serial.h"
+#include "ggs_ble.h"
 
 static const char *TAG = "improv";
 
@@ -22,7 +23,14 @@ static const char *TAG = "improv";
 #define IMPROV_VERSION 1
 
 enum { T_STATE = 0x01, T_ERROR = 0x02, T_RPC = 0x03, T_RPC_RESULT = 0x04 };
-enum { CMD_WIFI = 0x01, CMD_STATE = 0x02, CMD_INFO = 0x03, CMD_SCAN = 0x04 };
+enum { CMD_WIFI = 0x01, CMD_STATE = 0x02, CMD_INFO = 0x03, CMD_SCAN = 0x04,
+       // SpiderBridge extensions. The Improv spec reserves 0x01..0x04; other
+       // Improv clients never send these and get UNKNOWN_RPC_COMMAND for them.
+       CMD_X_NETINFO = 0x40,   // -> addresses and status, see handle_netinfo()
+       CMD_X_AP_PASS = 0x41,   // [pass] ("" = random) -> hotspot password
+       CMD_X_WIFI_AP = 0x42,   // [ssid][pass][ap pass][quick] join + hotspot password
+                               // optional last string "1" = quick connect, see below
+       CMD_X_BLE     = 0x43 }; // -> Bluetooth side: armed flag, last result, controllers found
 enum { ST_READY = 0x02, ST_PROVISIONING = 0x03, ST_PROVISIONED = 0x04 };
 enum { ERR_NONE = 0x00, ERR_INVALID = 0x01, ERR_UNKNOWN_CMD = 0x02,
        ERR_CONNECT = 0x03, ERR_UNKNOWN = 0xFF };
@@ -73,6 +81,150 @@ static bool sta_url(char *out, size_t n)
     return true;
 }
 
+// Reads one length-prefixed string from the argument block. Fails when it
+// does not fit the block or the destination (cap includes the terminator).
+static bool take_str(const uint8_t *a, uint8_t alen, uint8_t *pos, char *out, size_t cap)
+{
+    if (*pos >= alen) return false;
+    uint8_t l = a[*pos];
+    if ((unsigned)*pos + 1u + l > alen || (size_t)l >= cap) return false;
+    memcpy(out, a + *pos + 1, l);
+    out[l] = '\0';
+    *pos = (uint8_t)(*pos + 1 + l);
+    return true;
+}
+
+// Everything the installer shows under "IP addresses". Strings, in order:
+//   0 uplink SSID      ("" when none)       5 hotspot MAC
+//   1 uplink IP        ("" when no address) 6 hotspot clients (decimal)
+//   2 uplink gateway                        7 uplink RSSI in dBm (decimal)
+//   3 hotspot SSID                          8 bridge name
+//   4 hotspot IP                            9 firmware version
+static void handle_netinfo(void)
+{
+    // On the heap: this task's stack is only 3.5 KB.
+    wifi_status_t *w = calloc(1, sizeof(*w));
+    if (!w) { send_error(ERR_UNKNOWN); return; }
+    wifi_apsta_get_status(w);
+    char clients[8], rssi[8];
+    snprintf(clients, sizeof(clients), "%d", w->ap_clients);
+    snprintf(rssi, sizeof(rssi), "%d", w->sta_rssi);
+    const esp_app_desc_t *app = esp_app_get_description();
+    const char *s[] = { w->sta_ssid, w->sta_ip, w->sta_gateway,
+                        w->ap_ssid, w->ap_ip, w->ap_mac, clients, rssi,
+                        prov_bridge_name(), app->version };
+    send_result(CMD_X_NETINFO, s, 10);
+    free(w);
+}
+
+// The hotspot restarts with the new password; a controller on it has to be
+// told the new one (app or Bluetooth), so a restart right here is the
+// honest way to make the change real instead of leaving it half-applied.
+static void restart_soon(void)
+{
+    ESP_LOGW(TAG, "Hotspot password changed -- restarting to apply it");
+    vTaskDelay(pdMS_TO_TICKS(2500));
+    esp_restart();
+}
+
+static void handle_ap_pass(const uint8_t *a, uint8_t alen)
+{
+    char pw[65];
+    uint8_t pos = 0;
+    if (!take_str(a, alen, &pos, pw, sizeof(pw)) || pos != alen) { send_error(ERR_INVALID); return; }
+    if (pw[0] == '\0') sb_prov_random_ap_pass(pw, 16);
+    if (!sb_prov_store_ap_pass(pw)) { memset(pw, 0, sizeof(pw)); send_error(ERR_INVALID); return; }
+
+    wifi_status_t *w = calloc(1, sizeof(*w));
+    if (w) wifi_apsta_get_status(w);
+    const char *s[] = { w ? w->ap_ssid : "", pw };
+    send_result(CMD_X_AP_PASS, s, 2);
+    memset(pw, 0, sizeof(pw));
+    free(w);
+    restart_soon();
+}
+
+// Join the home network and set a new hotspot password in one step. Nothing
+// is stored unless the network was joined, so a typo in the Wi-Fi password
+// cannot leave the bridge with a new hotspot password and no uplink.
+static void handle_wifi_ap(const uint8_t *a, uint8_t alen)
+{
+    char ssid[33], pass[65], ap_pass[65], quick[4] = "";
+    uint8_t pos = 0;
+    if (!take_str(a, alen, &pos, ssid, sizeof(ssid)) ||
+        !take_str(a, alen, &pos, pass, sizeof(pass)) ||
+        !take_str(a, alen, &pos, ap_pass, sizeof(ap_pass)) || !ssid[0]) {
+        send_error(ERR_INVALID); return;
+    }
+    // Optional fourth string: "1" asks for quick connect (see below).
+    if (pos < alen && !take_str(a, alen, &pos, quick, sizeof(quick))) { send_error(ERR_INVALID); return; }
+    if (pos != alen) { send_error(ERR_INVALID); return; }
+    if (ap_pass[0] == '\0') sb_prov_random_ap_pass(ap_pass, 16);
+    if (strlen(ap_pass) < 8 || strlen(ap_pass) > 63) { send_error(ERR_INVALID); return; }
+
+    ESP_LOGI(TAG, "Wi-Fi + hotspot password received over serial (installer): \"%s\"", ssid);
+    send_state(ST_PROVISIONING);
+    sb_prov_cfg_t *p = malloc(sizeof(*p));
+    if (!p) { send_error(ERR_UNKNOWN); return; }
+    sb_prov_load(p);
+    char msg[160];
+    if (!wifi_apsta_connect_now(ssid, pass, 20000, msg, sizeof(msg))) {
+        ESP_LOGW(TAG, "%s", msg);
+        send_error(ERR_CONNECT);
+        send_state(ST_READY);
+        free(p);
+        return;
+    }
+    strncpy(p->sta_ssid, ssid, sizeof(p->sta_ssid) - 1);
+    p->sta_ssid[sizeof(p->sta_ssid) - 1] = '\0';
+    strncpy(p->sta_pass, pass, sizeof(p->sta_pass) - 1);
+    p->sta_pass[sizeof(p->sta_pass) - 1] = '\0';
+    strncpy(p->ap_pass, ap_pass, sizeof(p->ap_pass) - 1);
+    p->ap_pass[sizeof(p->ap_pass) - 1] = '\0';
+    sb_prov_save(p);
+    // Quick connect: on the next start the Bluetooth scan also puts the GGS controllers
+    // it finds onto this hotspot. Set only now, after the network was really joined, so a
+    // failed attempt cannot leave it armed.
+    sb_prov_set_auto_ble(quick[0] == '1');
+
+    char url[40] = "";
+    sta_url(url, sizeof(url));
+    send_error(ERR_NONE);
+    send_state(ST_PROVISIONED);
+    const char *s[] = { url, p->ap_ssid, ap_pass };
+    send_result(CMD_X_WIFI_AP, s, 3);
+    memset(pass, 0, sizeof(pass));
+    memset(ap_pass, 0, sizeof(ap_pass));
+    memset(p, 0, sizeof(*p));
+    free(p);
+    restart_soon();
+}
+
+// Strings: 0 "1" when quick connect is armed for the next start, else "0";
+//          1 last Bluetooth result ("" when none); 2 number of controllers
+//          found by the last scan; 3.. one "address|name|rssi" per controller.
+// Read only; it does not start a scan (a scan restarts the bridge into Bluetooth).
+static void handle_ble(void)
+{
+    ggs_ble_status_t *b = calloc(1, sizeof(*b));
+    if (!b) { send_error(ERR_UNKNOWN); return; }
+    ggs_ble_get_status(b);
+    char n[8];
+    snprintf(n, sizeof(n), "%d", b->scanned ? b->count : 0);
+    char rows[GGS_BLE_MAX_FOUND][64];
+    const char *s[3 + GGS_BLE_MAX_FOUND];
+    s[0] = sb_prov_auto_ble() ? "1" : "0";
+    s[1] = b->last_result;
+    s[2] = n;
+    int k = 3;
+    for (int i = 0; b->scanned && i < b->count && i < GGS_BLE_MAX_FOUND; i++) {
+        snprintf(rows[i], sizeof(rows[i]), "%s|%s|%d", b->dev[i].addr, b->dev[i].name, (int)b->dev[i].rssi);
+        s[k++] = rows[i];
+    }
+    send_result(CMD_X_BLE, s, k);
+    free(b);
+}
+
 static void handle_rpc(const uint8_t *d, uint8_t len)
 {
     if (len < 2 || d[1] != len - 2) { send_error(ERR_INVALID); return; }
@@ -81,6 +233,10 @@ static void handle_rpc(const uint8_t *d, uint8_t len)
     uint8_t alen = d[1];
 
     switch (cmd) {
+    case CMD_X_NETINFO: handle_netinfo(); break;
+    case CMD_X_BLE:     handle_ble(); break;
+    case CMD_X_AP_PASS: handle_ap_pass(a, alen); break;
+    case CMD_X_WIFI_AP: handle_wifi_ap(a, alen); break;
     case CMD_STATE: {
         char url[40];
         if (sta_url(url, sizeof(url))) {
@@ -198,7 +354,11 @@ static void improv_task(void *arg)
         bool ok = sum == buf[9 + len] && ver == IMPROV_VERSION;
         n = 0;
         if (!ok) { send_error(ERR_INVALID); continue; }
-        if (type == T_RPC) handle_rpc(buf + 9, len);
+        if (type == T_RPC) {
+            // Someone is using the installer: keep the window open while they do.
+            until = xTaskGetTickCount() + pdMS_TO_TICKS(IMPROV_WINDOW_MS);
+            handle_rpc(buf + 9, len);
+        }
     }
     uart_driver_delete(UART_PORT);
     ESP_LOGI(TAG, "Serial Wi-Fi setup (Improv) closed after %d min -- memory released",

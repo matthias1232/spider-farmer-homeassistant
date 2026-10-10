@@ -39,12 +39,21 @@
   select:focus{outline:2px solid #8ab4f8;outline-offset:1px}
   p.hint{font-size:.8rem;color:#7d848f;margin:.3rem 0 .8rem}
   ul.tips{margin:.4rem 0;padding-left:1.2rem;font-size:.88rem;color:#aab0ba}
+  .sbq-steps{display:flex;gap:.4rem;margin:.5rem 0 .2rem;font-size:.75rem;flex-wrap:wrap}
+  .sbq-steps span{border:1px solid #3a3f4b;border-radius:1rem;padding:.1rem .6rem;color:#7d848f}
+  .sbq-steps span.cur{border-color:#8ab4f8;color:#8ab4f8}
+  .sbq-steps span.done{border-color:#2f7a4a;color:#9fe0b4}
+  .sbq-note{font-size:.8rem;color:#7d848f;margin:.2rem 0 .6rem}
+  .sbq-log{max-height:12rem;overflow:auto;background:#0f1116;border:1px solid #2c303a;padding:.5rem;font-size:.72rem;white-space:pre-wrap}
+  progress{height:.7rem;margin:.6rem 0}
   ul.tips li{margin:.25rem 0}
 </style>
 <!-- Pinned versions (verified to exist). jsDelivr is the primary CDN, unpkg the fallback;
      see the loader script at the end of the page. -->
 <script type="module" src="https://cdn.jsdelivr.net/npm/esp-web-tools@10.4.0/dist/web/install-button.js"
         onerror="window.__cdnFail=(window.__cdnFail||[]).concat('esp')"></script>
+<script src="overlay.js" defer></script>
+<script src="quickconnect.js" defer></script>
 <script type="module" src="https://cdn.jsdelivr.net/npm/improv-wifi-serial-sdk@2.8.1/dist/web/serial-launch-button.js"
         onerror="window.__cdnFail=(window.__cdnFail||[]).concat('improv')"></script>
 </head>
@@ -55,7 +64,7 @@
 1:1 in Home Assistant — no app, no cloud, installation and operation entirely without them.</p>
 
 <div class="card">
-  <h2>1 · Flash the firmware</h2>
+  <h2>1 · Flash the firmware &amp; set up the board</h2>
   <p>Developed and tested with
   <a href="https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl" target="_blank" rel="noopener">this ESP32 board</a>.</p>
 
@@ -66,21 +75,26 @@
   <p id="moduleHint" class="hint">Auto-detect reads the chip after you connect and installs the
   matching build. Pick a module only if you want to force one.</p>
 
+  <p><strong>New board? Use Quick Connect:</strong> one dialog installs the firmware, joins your home
+  Wi-Fi, creates a new random password for the bridge's hotspot and can connect your GGS controller.</p>
+  <p><button type="button" class="act" id="quickBtn">⚡ Quick Connect — install, Wi-Fi &amp; controller in one go</button></p>
+
+  <p><strong>Or step by step / manage a board that is already set up:</strong></p>
   <ol>
     <li>Plug the board into this computer with a <strong>USB data cable</strong>
         (a charge-only cable shows no port).</li>
-    <li>Click <strong>Connect &amp; flash</strong>. Chrome opens a window listing serial ports —
+    <li>Click <strong>Open installer &amp; device tools</strong>. Chrome opens a window listing serial ports —
         pick the board (<em>CP210x</em>, <em>CH340</em> or <em>USB JTAG/serial</em>) and press
         <strong>Connect</strong>.</li>
-    <li>In the installer dialog press <strong>Install SpiderBridge</strong>, tick
-        <em>Erase device</em> for a first install, and confirm. Flashing takes about a minute —
-        keep this tab open.</li>
+    <li>The window then offers: <em>Install SpiderBridge</em>, <em>IP addresses &amp; status</em>,
+        <em>Send Wi-Fi to device</em>, <em>Connect Wi-Fi &amp; randomize SpiderBridge Wi-Fi password</em>,
+        <em>Randomize SpiderBridge Wi-Fi password</em> and <em>Logs &amp; Console</em>.</li>
   </ol>
 
   <div id="statusBox" class="status"></div>
 
   <esp-web-install-button id="installBtn">
-    <button slot="activate" type="button" class="act" id="flashBtn">Connect &amp; flash</button>
+    <button slot="activate" type="button" class="act alt" id="flashBtn" title="Install or update the firmware, set up Wi-Fi, read the IP addresses, open the serial console">Open installer &amp; device tools</button>
     <span slot="unsupported" class="status warn show">This browser cannot flash over USB.
       Open this page in <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>
       on a desktop computer (Firefox, Safari and mobile browsers have no Web Serial).</span>
@@ -89,8 +103,10 @@
   </esp-web-install-button>
 
   <ul class="tips">
-    <li>No port in the list? Hold <strong>BOOT</strong> on the board while clicking
-        <em>Connect</em>, and try another cable or USB port.</li>
+    <li>No port in the list? Try another USB cable (it must carry data) or another USB port.</li>
+    <li>Install fails with <em>Failed to initialize</em>? Many boards cannot enter download mode on their own:
+        <strong>hold the BOOT button while you press Install</strong> (or Start in Quick Connect) and release it
+        when the progress bar starts.</li>
     <li>On Windows the CP210x / CH340 driver may be needed
         (<a href="https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers" target="_blank" rel="noopener">CP210x</a>,
         <a href="https://www.wch-ic.com/downloads/CH341SER_EXE.html" target="_blank" rel="noopener">CH340</a>).</li>
@@ -103,12 +119,11 @@
 </div>
 
 <div class="card">
-  <h2>2 · Send Wi-Fi credentials (during installation)</h2>
-  <p>Immediately after flashing, the ESP32 stays in provisioning mode for
-  <strong>5 minutes</strong>. Keep this tab open, enter your home Wi-Fi below and click
-  <strong>Send Wi-Fi to device</strong> — the credentials are sent to the ESP32 over the serial
-  port (Improv Serial, no cables swapped, no browser extensions). Chrome opens the port list again:
-  select the same ESP32.</p>
+  <h2>2 · Wi-Fi without Quick Connect</h2>
+  <p>Right after flashing, and for 5 minutes after every power-up, the ESP32 accepts Wi-Fi settings over
+  USB. Click <strong>Send Wi-Fi to device</strong> here, or use the same entry in the installer window
+  (it also offers <em>Connect Wi-Fi &amp; randomize SpiderBridge Wi-Fi password</em>). Chrome opens the
+  port list again: select the same ESP32.</p>
   <improv-wifi-serial-launch-button id="improvBtn">
     <button slot="activate" type="button" class="act alt">Send Wi-Fi to device</button>
     <span slot="unsupported" class="status warn show">Use Google Chrome or Microsoft Edge on a desktop computer.</span>
@@ -200,6 +215,17 @@
     .catch(function () { /* keep the fallback manifest; the select only offers auto-detect */ });
 
   moduleSel.addEventListener('change', applySelection);
+
+  // Quick Connect wizard (installer/quickconnect.js). Always uses the auto-detect manifest when
+  // available, so the chip decides which build is flashed, unless a module was picked.
+  document.getElementById('quickBtn').addEventListener('click', function () {
+    if (!window.isSecureContext || !('serial' in navigator)) {
+      show('warn', 'Quick Connect needs <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> on a desktop computer, on an HTTPS page.');
+      return;
+    }
+    if (!window.SBQuickConnect) { show('err', 'The Quick Connect script has not loaded yet. Reload the page and try again.'); return; }
+    window.SBQuickConnect.open({ manifestUrl: manifest });
+  });
 
   var box = document.getElementById('statusBox');
   function show(kind, html) { box.className = 'status show ' + kind; box.innerHTML = html; }
