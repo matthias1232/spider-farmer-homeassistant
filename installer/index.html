@@ -136,26 +136,7 @@
 </div>
 
 <div class="card">
-  <h2>2 · Wi-Fi without Quick Connect</h2>
-  <p>The ESP32 accepts Wi-Fi settings over USB at any time, also after a restart or a crash: its USB console never
-  switches off. Click <strong>Home Wi-Fi for the bridge</strong> here to give the bridge your home network, or use the
-  installer window (<em>Open installer &amp; device tools</em>), which also offers <em>Send Wi-Fi to GGS Controller</em>
-  (finds your Spider Farmer controller over Bluetooth and gives it the bridge's hotspot Wi-Fi),
-  <em>Connect Wi-Fi &amp; randomize SpiderBridge Wi-Fi password</em>, <em>IP addresses &amp; status</em>,
-  <em>Health &amp; restarts</em> and <em>Restart the board</em>. Chrome opens the port list again: select the same ESP32.</p>
-  <improv-wifi-serial-launch-button id="improvBtn">
-    <button slot="activate" type="button" class="act alt">Home Wi-Fi for the bridge</button>
-    <span slot="unsupported" class="status warn show">Use Google Chrome or Microsoft Edge on a desktop computer.</span>
-    <span slot="not-allowed" class="status err show">This needs an HTTPS page.</span>
-  </improv-wifi-serial-launch-button>
-  <p><small>If the port disappears after flashing, close and reopen it — the Improv
-  dialog needs the serial port itself. Without this step the bridge creates its own
-  hotspot (<code>SpiderBridge</code>, password <code>12345678</code>) and you can
-  configure Wi-Fi at <code>http://192.168.10.1</code>.</small></p>
-</div>
-
-<div class="card">
-  <h2>3 · Live console</h2>
+  <h2>2 · Live console</h2>
   <p>Shows what the board prints, and keeps showing it: after a flash, a restart, a crash or when you unplug the
   cable and plug it back in, the console reconnects <strong>by itself</strong>. Click <em>Connect console</em> once and
   choose the port; Chrome remembers it. While the installer window or Quick Connect uses the port, the console steps
@@ -166,7 +147,7 @@
 </div>
 
 <div class="card">
-  <h2>4 · What happens next</h2>
+  <h2>3 · What happens next</h2>
   <ol>
     <li>The bridge joins your network — open its web interface
         (hostname <code>spiderbridge.local</code> or its IP from your router).</li>
