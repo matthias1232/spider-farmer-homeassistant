@@ -184,7 +184,9 @@ Three steps, no app and no cloud involved.
    continue* button instead.
 3. **Already flashed, or want single steps:** click *Open installer & device tools*. The window it opens
    offers *Install*, *IP addresses & status* (home network, hotspot, gateway, signal),
-   *Send Wi-Fi to device*, *Connect Wi-Fi & randomize SpiderBridge Wi-Fi password*,
+   *Send Wi-Fi to GGS Controller* (searches for your Spider Farmer controller over Bluetooth and sends it the
+   bridge's hotspot Wi-Fi; the controller stays visible for the phone), *Home Wi-Fi for the bridge*,
+   *Connect Wi-Fi & randomize SpiderBridge Wi-Fi password*,
    *Randomize SpiderBridge Wi-Fi password* and *Logs & Console*. (You can also join the
    `SpiderBridge` hotspot and configure Wi-Fi at `http://192.168.10.1`.)
 4. Leave **Module** on *Auto-detect* (or pick your module, like the board list in Tasmota's installer).

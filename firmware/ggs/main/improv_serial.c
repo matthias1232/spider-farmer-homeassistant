@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <strings.h>
 
 #include "esp_log.h"
 #include "esp_app_desc.h"
@@ -35,7 +36,12 @@ enum { CMD_WIFI = 0x01, CMD_STATE = 0x02, CMD_INFO = 0x03, CMD_SCAN = 0x04,
        CMD_X_BLE     = 0x43, // -> Bluetooth side: armed flag, last result, controllers found
        CMD_X_RESTART = 0x44, // restart the bridge (answers first)
        CMD_X_DIAG    = 0x45, // -> why it last restarted, restart counters, heap, uptime
-       CMD_X_FAULT   = 0x46 }; // ["CRASH-TEST"]["panic|taskwdt|intwdt|deadlock|leak"] self-test, see fault_inject.h
+       CMD_X_FAULT   = 0x46, // ["CRASH-TEST"]["panic|taskwdt|intwdt|deadlock|leak"] self-test, see fault_inject.h
+       // Spider Farmer GGS controllers over Bluetooth. Both start a Bluetooth-only boot (the board is silent on
+       // USB for 10-120 s), so the caller polls CMD_X_BLE_JOB until the board answers again.
+       CMD_X_BLE_SCAN = 0x47, // search for controllers again -> ["1"] started, ["0"] busy
+       CMD_X_BLE_SEND = 0x48, // [address] give this controller the bridge's hotspot Wi-Fi -> ["1"] / ["0"] busy
+       CMD_X_BLE_JOB  = 0x49 }; // -> outcome of the last send: [state, address, text, pending]
 enum { ST_READY = 0x02, ST_PROVISIONING = 0x03, ST_PROVISIONED = 0x04 };
 enum { ERR_NONE = 0x00, ERR_INVALID = 0x01, ERR_UNKNOWN_CMD = 0x02,
        ERR_CONNECT = 0x03, ERR_UNKNOWN = 0xFF };
@@ -207,7 +213,8 @@ static void handle_wifi_ap(const uint8_t *a, uint8_t alen)
 
 // Strings: 0 "1" when quick connect is armed for the next start, else "0";
 //          1 last Bluetooth result ("" when none); 2 number of controllers
-//          found by the last scan; 3.. one "address|name|rssi" per controller.
+//          found by the last scan; 3.. one "address|name|rssi|flags" per controller (flags: bit 0 bound to an
+//          account, bit 1 on Wi-Fi, bit 3 cloud session; -1 when not advertised).
 // Read only; it does not start a scan (a scan restarts the bridge into Bluetooth).
 static void handle_ble(void)
 {
@@ -223,7 +230,8 @@ static void handle_ble(void)
     s[2] = n;
     int k = 3;
     for (int i = 0; b->scanned && i < b->count && i < GGS_BLE_MAX_FOUND; i++) {
-        snprintf(rows[i], sizeof(rows[i]), "%s|%s|%d", b->dev[i].addr, b->dev[i].name, (int)b->dev[i].rssi);
+        snprintf(rows[i], sizeof(rows[i]), "%s|%s|%d|%d", b->dev[i].addr, b->dev[i].name, (int)b->dev[i].rssi,
+                 b->dev[i].has_flags ? (int)b->dev[i].flags : -1);
         s[k++] = rows[i];
     }
     send_result(CMD_X_BLE, s, k);
@@ -268,6 +276,56 @@ static void handle_diag(void)
     free(i);
 }
 
+// Search again for GGS controllers. The bridge restarts into a Bluetooth-only boot, scans, and comes back.
+static void handle_ble_scan(void)
+{
+    const char *s[] = { ggs_ble_request_scan(1500) ? "1" : "0" };
+    send_result(CMD_X_BLE_SCAN, s, 1);
+}
+
+// Give one controller the bridge's hotspot Wi-Fi (name and password as stored), over Bluetooth. Only a controller
+// the last scan found is accepted -- nothing else ever receives the hotspot's credentials. The controller is left
+// visible over Bluetooth (no binding), so the phone and the Spider Farmer app can still find it.
+static void handle_ble_send(const uint8_t *a, uint8_t alen)
+{
+    char addr[24];
+    uint8_t pos = 0;
+    if (!take_str(a, alen, &pos, addr, sizeof(addr)) || pos != alen || strlen(addr) != 17) {
+        send_error(ERR_INVALID);
+        return;
+    }
+    ggs_ble_status_t *b = calloc(1, sizeof(*b));
+    if (!b) { send_error(ERR_UNKNOWN); return; }
+    ggs_ble_get_status(b);
+    bool known = false;
+    for (int i = 0; b->scanned && i < b->count && i < GGS_BLE_MAX_FOUND; i++) {
+        if (strcasecmp(b->dev[i].addr, addr) == 0) {
+            memcpy(addr, b->dev[i].addr, 18);       // the spelling the Bluetooth code stored
+            known = true;
+            break;
+        }
+    }
+    free(b);
+    if (!known) { send_error(ERR_INVALID); return; }
+    ESP_LOGI(TAG, "Hotspot Wi-Fi for controller %s requested over USB (installer)", addr);
+    const char *s[] = { ggs_ble_request_provision(addr, false, 1500) ? "1" : "0" };
+    send_result(CMD_X_BLE_SEND, s, 1);
+}
+
+// Outcome of the last send. Strings: 0 state ("0" none, "1" pending, "2" accepted, "3" failed), 1 controller
+// address, 2 the text a person would read, 3 "1" while a Bluetooth boot is still requested but has not begun.
+static void handle_ble_job(void)
+{
+    ggs_ble_status_t *b = calloc(1, sizeof(*b));
+    if (!b) { send_error(ERR_UNKNOWN); return; }
+    ggs_ble_get_status(b);
+    char job[4];
+    snprintf(job, sizeof(job), "%u", (unsigned)b->job);
+    const char *s[] = { job, b->job_addr, b->last_result, b->pending ? "1" : "0" };
+    send_result(CMD_X_BLE_JOB, s, 4);
+    free(b);
+}
+
 // Self-test of the recovery layers: makes the bridge fail on purpose. Only over the USB cable, and only with
 // the confirmation word, so it cannot happen by accident. See fault_inject.h.
 static void handle_fault(const uint8_t *a, uint8_t alen)
@@ -297,6 +355,9 @@ static void handle_rpc(const uint8_t *d, uint8_t len)
     case CMD_X_RESTART: handle_restart(); break;
     case CMD_X_DIAG:    handle_diag(); break;
     case CMD_X_FAULT:   handle_fault(a, alen); break;
+    case CMD_X_BLE_SCAN: handle_ble_scan(); break;
+    case CMD_X_BLE_SEND: handle_ble_send(a, alen); break;
+    case CMD_X_BLE_JOB:  handle_ble_job(); break;
     case CMD_X_AP_PASS: handle_ap_pass(a, alen); break;
     case CMD_X_WIFI_AP: handle_wifi_ap(a, alen); break;
     case CMD_STATE: {

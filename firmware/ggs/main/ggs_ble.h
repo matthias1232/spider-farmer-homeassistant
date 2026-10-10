@@ -46,6 +46,15 @@ typedef struct {
     bool    has_flags;
 } ggs_ble_dev_t;
 
+// Outcome of the last "send the hotspot Wi-Fi to a controller" job, for programs (the text in last_result is for
+// people). It survives the restarts in and out of the Bluetooth boot together with the rest of the status.
+typedef enum {
+    GGS_JOB_NONE = 0,
+    GGS_JOB_PENDING = 1,     // requested, the Bluetooth boot has not finished
+    GGS_JOB_OK = 2,          // the controller accepted the Wi-Fi settings
+    GGS_JOB_FAILED = 3,      // it did not (or the job never completed)
+} ggs_job_t;
+
 typedef struct {
     bool     pending;        // a Bluetooth boot has been requested
     bool     scanned;        // at least one scan has completed
@@ -54,6 +63,8 @@ typedef struct {
     char     busy_addr[18];  // device a requested setup will talk to
     char     last_result[160];
     char     trace[512];     // step log of the last Bluetooth boot
+    uint8_t  job;            // ggs_job_t of the last send job
+    char     job_addr[18];   // the controller that job was for
 } ggs_ble_status_t;
 
 // Call first thing in app_main. Returns true when this is a Bluetooth boot:

@@ -94,6 +94,9 @@ bool sb_prov_auto_ble(void) { return g_auto_ble; }
 void sb_prov_set_auto_ble(bool on) { g_auto_ble = on; }
 static ggs_ble_status_t g_ble;
 void ggs_ble_get_status(ggs_ble_status_t *o) { *o = g_ble; }
+static int g_scan_req, g_send_req; static char g_send_addr[24]; static bool g_busy;
+bool ggs_ble_request_scan(uint32_t d) { (void)d; if (g_busy) return false; g_scan_req++; return true; }
+bool ggs_ble_request_provision(const char *a, bool bind, uint32_t d) { (void)d; if (g_busy || bind) return false; g_send_req++; strcpy(g_send_addr, a); return true; }
 const char *prov_bridge_name(void) { return "SpiderBridge 6062F5"; }
 void sb_prov_load(sb_prov_cfg_t *o) { *o = g_cfg; }
 void sb_prov_save(const sb_prov_cfg_t *c) { g_cfg = *c; g_saved = true; }
@@ -164,7 +167,7 @@ static int failures;
 static void reset_world(bool connect_ok)
 {
     memset(&g_cfg, 0, sizeof(g_cfg)); strcpy(g_cfg.sta_ssid, "OldNet"); strcpy(g_cfg.ap_ssid, "SpiderBridge"); g_saved = false; g_restarts = 0;
-    g_auto_ble = false; memset(&g_ble, 0, sizeof(g_ble)); g_sv_why = -1; memset(&g_sv, 0, sizeof(g_sv)); g_fault[0] = 0;
+    g_auto_ble = false; memset(&g_ble, 0, sizeof(g_ble)); g_scan_req = g_send_req = 0; g_send_addr[0] = 0; g_busy = false; g_sv_why = -1; memset(&g_sv, 0, sizeof(g_sv)); g_fault[0] = 0;
     g_stored_ap_pass[0] = 0; g_joined_ssid[0] = 0; g_connect_ok = connect_ok; g_task = NULL; g_ticks = 0;
 }
 
@@ -310,11 +313,11 @@ int main(void)
     reset_world(true); g_auto_ble = true;
     g_ble.scanned = true; g_ble.count = 2;
     strcpy(g_ble.dev[0].addr, "AA:BB:CC:00:11:22"); strcpy(g_ble.dev[0].name, "SF-GGS-1A"); g_ble.dev[0].rssi = -61;
-    strcpy(g_ble.dev[1].addr, "AA:BB:CC:00:11:33"); strcpy(g_ble.dev[1].name, "SF-GGS-2B"); g_ble.dev[1].rssi = -78;
+    strcpy(g_ble.dev[1].addr, "AA:BB:CC:00:11:33"); strcpy(g_ble.dev[1].name, "SF-GGS-2B"); g_ble.dev[1].rssi = -78; g_ble.dev[1].has_flags = true; g_ble.dev[1].flags = 3;
     strcpy(g_ble.last_result, "Quick connect: 2 of 2 controller(s) connected to the hotspot, still visible over Bluetooth. ");
     n = put_rpc(pkt, 0x43, NULL, 0); run(pkt, n);
     CHECK(result_strings(0x43, r) == 5); CHECK(!strcmp(r[0], "1")); CHECK(!strcmp(r[2], "2"));
-    CHECK(!strcmp(r[3], "AA:BB:CC:00:11:22|SF-GGS-1A|-61")); CHECK(!strcmp(r[4], "AA:BB:CC:00:11:33|SF-GGS-2B|-78"));
+    CHECK(!strcmp(r[3], "AA:BB:CC:00:11:22|SF-GGS-1A|-61|-1")); CHECK(!strcmp(r[4], "AA:BB:CC:00:11:33|SF-GGS-2B|-78|3"));
     CHECK(g_restarts == 0); fixture("ble_found");
 
     // 20) a scan that was never completed is not reported as "0 found"
@@ -368,6 +371,58 @@ int main(void)
     reset_world(true);
     { const char *v[] = { "CRASH-TEST", "panic", "x" }; size_t l = strs(a, v, 3); n = put_rpc(pkt, 0x46, a, (uint8_t)l); }
     run(pkt, n); CHECK(last_error() == 1); CHECK(g_fault[0] == 0);          // trailing junk
+
+    // 26) BLE scan request
+    reset_world(true);
+    n = put_rpc(pkt, 0x47, NULL, 0); run(pkt, n);
+    CHECK(result_strings(0x47, r) == 1); CHECK(!strcmp(r[0], "1")); CHECK(g_scan_req == 1); fixture("ble_scan");
+    reset_world(true); g_busy = true;
+    n = put_rpc(pkt, 0x47, NULL, 0); run(pkt, n);
+    CHECK(result_strings(0x47, r) == 1); CHECK(!strcmp(r[0], "0")); CHECK(g_scan_req == 0);          // busy: reported, not pretended
+
+    // 27) BLE send: only a controller the last scan found, in any letter case, never anything else
+    reset_world(true);
+    g_ble.scanned = true; g_ble.count = 1; strcpy(g_ble.dev[0].addr, "AA:BB:CC:00:11:22"); strcpy(g_ble.dev[0].name, "SF-GGS-1A");
+    { const char *v[] = { "aa:bb:cc:00:11:22" }; size_t l = strs(a, v, 1); n = put_rpc(pkt, 0x48, a, (uint8_t)l); }
+    run(pkt, n);
+    CHECK(result_strings(0x48, r) == 1); CHECK(!strcmp(r[0], "1")); CHECK(g_send_req == 1); CHECK(!strcmp(g_send_addr, "AA:BB:CC:00:11:22")); fixture("ble_send");
+    reset_world(true);
+    g_ble.scanned = true; g_ble.count = 1; strcpy(g_ble.dev[0].addr, "AA:BB:CC:00:11:22");
+    { const char *v[] = { "AA:BB:CC:00:11:99" }; size_t l = strs(a, v, 1); n = put_rpc(pkt, 0x48, a, (uint8_t)l); }
+    run(pkt, n); CHECK(last_error() == 1); CHECK(g_send_req == 0);                                   // not in the scan
+    reset_world(true);
+    { const char *v[] = { "AA:BB:CC:00:11:22" }; size_t l = strs(a, v, 1); n = put_rpc(pkt, 0x48, a, (uint8_t)l); }
+    run(pkt, n); CHECK(last_error() == 1); CHECK(g_send_req == 0);                                   // no scan at all
+    reset_world(true);
+    g_ble.scanned = false; g_ble.count = 1; strcpy(g_ble.dev[0].addr, "AA:BB:CC:00:11:22");
+    { const char *v[] = { "AA:BB:CC:00:11:22" }; size_t l = strs(a, v, 1); n = put_rpc(pkt, 0x48, a, (uint8_t)l); }
+    run(pkt, n); CHECK(last_error() == 1); CHECK(g_send_req == 0);                                   // stale list from an unfinished scan
+    reset_world(true);
+    g_ble.scanned = true; g_ble.count = 1; strcpy(g_ble.dev[0].addr, "AA:BB:CC:00:11:22");
+    { const char *v[] = { "AA:BB:CC:00:11" }; size_t l = strs(a, v, 1); n = put_rpc(pkt, 0x48, a, (uint8_t)l); }
+    run(pkt, n); CHECK(last_error() == 1); CHECK(g_send_req == 0);                                   // malformed address
+    reset_world(true);
+    g_ble.scanned = true; g_ble.count = 1; strcpy(g_ble.dev[0].addr, "AA:BB:CC:00:11:22");
+    { const char *v[] = { "AA:BB:CC:00:11:22", "x" }; size_t l = strs(a, v, 2); n = put_rpc(pkt, 0x48, a, (uint8_t)l); }
+    run(pkt, n); CHECK(last_error() == 1); CHECK(g_send_req == 0);                                   // trailing junk
+    reset_world(true); g_busy = true;
+    g_ble.scanned = true; g_ble.count = 1; strcpy(g_ble.dev[0].addr, "AA:BB:CC:00:11:22");
+    { const char *v[] = { "AA:BB:CC:00:11:22" }; size_t l = strs(a, v, 1); n = put_rpc(pkt, 0x48, a, (uint8_t)l); }
+    run(pkt, n); CHECK(result_strings(0x48, r) == 1); CHECK(!strcmp(r[0], "0")); CHECK(g_send_req == 0);   // busy
+
+    // 28) job outcome, every state
+    static const struct { uint8_t job; const char *state; } JOBS[] = { { 0, "0" }, { 1, "1" }, { 2, "2" }, { 3, "3" } };
+    for (int j = 0; j < 4; j++) {
+        reset_world(true);
+        g_ble.job = JOBS[j].job; strcpy(g_ble.job_addr, "AA:BB:CC:00:11:22");
+        strcpy(g_ble.last_result, j == 2 ? "SF-GGS-1A accepted the Wi-Fi settings and joined \"SpiderBridge\" (signal -52 dBm) -- still visible over Bluetooth" : "text");
+        g_ble.pending = (j == 1);
+        n = put_rpc(pkt, 0x49, NULL, 0); run(pkt, n);
+        CHECK(result_strings(0x49, r) == 4); CHECK(!strcmp(r[0], JOBS[j].state)); CHECK(!strcmp(r[1], "AA:BB:CC:00:11:22")); CHECK(!strcmp(r[3], j == 1 ? "1" : "0"));
+        if (j == 2) { CHECK(strstr(r[2], "joined") != NULL); fixture("ble_job_ok"); }
+        if (j == 3) fixture("ble_job_failed");
+        if (j == 1) fixture("ble_job_pending");
+    }
     fprintf(fx, "}\n"); fclose(fx);
     if (failures) { printf("%d FAILURE(S)\n", failures); return 1; }
     printf("ALL host tests passed\n");

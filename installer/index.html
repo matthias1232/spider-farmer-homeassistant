@@ -61,6 +61,7 @@
      see the loader script at the end of the page. -->
 <script type="module" src="https://cdn.jsdelivr.net/npm/esp-web-tools@10.4.0/dist/web/install-button.js"
         onerror="window.__cdnFail=(window.__cdnFail||[]).concat('esp')"></script>
+<script src="ggs.js" defer></script>
 <script src="overlay.js" defer></script>
 <script src="quickconnect.js" defer></script>
 <script src="console.js" defer></script>
@@ -103,7 +104,7 @@
         pick the board (<em>CP210x</em>, <em>CH340</em> or <em>USB JTAG/serial</em>) and press
         <strong>Connect</strong>.</li>
     <li>The window then offers: <em>Install SpiderBridge</em>, <em>IP addresses &amp; status</em>,
-        <em>Send Wi-Fi to device</em>, <em>Connect Wi-Fi &amp; randomize SpiderBridge Wi-Fi password</em>,
+        <em>Send Wi-Fi to GGS Controller</em>, <em>Home Wi-Fi for the bridge</em>, <em>Connect Wi-Fi &amp; randomize SpiderBridge Wi-Fi password</em>,
         <em>Randomize SpiderBridge Wi-Fi password</em> and <em>Logs &amp; Console</em>.</li>
   </ol>
 
@@ -137,11 +138,13 @@
 <div class="card">
   <h2>2 · Wi-Fi without Quick Connect</h2>
   <p>The ESP32 accepts Wi-Fi settings over USB at any time, also after a restart or a crash: its USB console never
-  switches off. Click <strong>Send Wi-Fi to device</strong> here, or use the same entry in the installer window
-  (it also offers <em>Connect Wi-Fi &amp; randomize SpiderBridge Wi-Fi password</em>, <em>IP addresses &amp; status</em>,
-  <em>Health &amp; restarts</em> and <em>Restart the board</em>). Chrome opens the port list again: select the same ESP32.</p>
+  switches off. Click <strong>Home Wi-Fi for the bridge</strong> here to give the bridge your home network, or use the
+  installer window (<em>Open installer &amp; device tools</em>), which also offers <em>Send Wi-Fi to GGS Controller</em>
+  (finds your Spider Farmer controller over Bluetooth and gives it the bridge's hotspot Wi-Fi),
+  <em>Connect Wi-Fi &amp; randomize SpiderBridge Wi-Fi password</em>, <em>IP addresses &amp; status</em>,
+  <em>Health &amp; restarts</em> and <em>Restart the board</em>. Chrome opens the port list again: select the same ESP32.</p>
   <improv-wifi-serial-launch-button id="improvBtn">
-    <button slot="activate" type="button" class="act alt">Send Wi-Fi to device</button>
+    <button slot="activate" type="button" class="act alt">Home Wi-Fi for the bridge</button>
     <span slot="unsupported" class="status warn show">Use Google Chrome or Microsoft Edge on a desktop computer.</span>
     <span slot="not-allowed" class="status err show">This needs an HTTPS page.</span>
   </improv-wifi-serial-launch-button>

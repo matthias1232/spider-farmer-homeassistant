@@ -62,7 +62,7 @@ static const ggs_key_t KEYS[] = {
 // ---------------------------------------------------------------------------
 // Changes with every layout change of ble_rtc_t, so RTC contents left by
 // an older firmware are discarded instead of read misaligned.
-#define BLE_RTC_MAGIC 0x47475305u   // "GGS" + layout version 5
+#define BLE_RTC_MAGIC 0x47475306u   // "GGS" + layout version 6 (job result added to the status)
 #define BLE_RTC_MAGIC_V BLE_RTC_MAGIC
 typedef enum { OP_NONE = 0, OP_SCAN = 1, OP_PROVISION = 2, OP_UNPAIR = 3 } op_t;
 typedef struct {
@@ -74,6 +74,15 @@ typedef struct {
     ggs_ble_status_t st;         // results, shown by the next normal boot
 } ble_rtc_t;
 static RTC_NOINIT_ATTR ble_rtc_t s_rtc;
+
+// The Bluetooth-only boot is cut short by a guard timer after this long (see ggs_ble_run_boot). Every wait inside it
+// is budgeted to finish well before that, because a guard that fires counts as a failed start (supervisor.h) and
+// three of those in a row would put the bridge in safe mode -- an out-of-range controller must not do that.
+#define BLE_BOOT_MAX_S 150
+#define CONNECT_BUDGET_S 60    // no new connection attempt after this many seconds since boot.
+                               // Worst case after it: one attempt that connects late (~30 s), then uid wait 4 s,
+                               // setWifi 4 s, status polling up to 30 s, setDevDeactive 4 s and the closing scan 9 s
+                               // = 60 + 30 + 51 = 141 s, under the 150 s guard.
 
 static SemaphoreHandle_t s_lock = NULL;
 static bool s_released = false;   // normal boot gave Bluetooth's RAM to the heap
@@ -931,6 +940,11 @@ static bool connect_target(void)
 {
     for (int attempt = 1; attempt <= 8; attempt++) {
         s_attempt = attempt;
+        if (attempt > 1 && esp_timer_get_time() > (int64_t)CONNECT_BUDGET_S * 1000000) {
+            blog("No more attempts: this Bluetooth boot must finish within %d s", BLE_BOOT_MAX_S);
+            set_result("Could not connect to %s in time -- in range, switched on and not connected to a phone?", s_target);
+            break;
+        }
         if (attempt > 1) blog("Retry %d of 8 (%s connection parameters)", attempt,
                               (attempt % 2) ? "default" : "relaxed");
         if (connect_once()) return true;
@@ -1243,7 +1257,13 @@ bool ggs_ble_boot_check(void)
     for (char *c = s_st.last_result; *c; c++)
         if ((unsigned char)*c >= 0x7F || (unsigned char)*c < 0x20) { s_st.last_result[0] = '\0'; break; }
     if (s_st.count < 0 || s_st.count > GGS_BLE_MAX_FOUND) { s_st.count = 0; s_st.scanned = false; }
+    if (s_st.job > GGS_JOB_FAILED) s_st.job = GGS_JOB_NONE;
+    s_st.job_addr[sizeof(s_st.job_addr) - 1] = '\0';
     if (s_rtc.op == OP_SCAN || s_rtc.op == OP_PROVISION || s_rtc.op == OP_UNPAIR) return true;
+
+    // Not a Bluetooth job boot. A send job that is still marked pending never reached its end (the guard
+    // timer, a crash, a power cut): report it as failed instead of leaving the installer waiting for it.
+    if (s_st.job == GGS_JOB_PENDING) s_st.job = GGS_JOB_FAILED;
 
     // No job requested for this boot: nothing can be "running". A busy
     // flag left behind by a job that never finished (crash, update during
@@ -1277,7 +1297,6 @@ bool ggs_ble_memory_released(void) { return s_released; }
 // The Bluetooth-only boot is a separate program run: if it stalls (a stack that never answers, a
 // connection that neither completes nor fails), nothing else will ever restart the chip into normal
 // operation. This one-shot timer does, whatever the Bluetooth code is doing.
-#define BLE_BOOT_MAX_S 150
 static void ble_boot_timeout(void *arg)
 {
     esp_rom_printf("ggs_ble: Bluetooth boot did not finish in %d s -- restarting into normal operation\n", BLE_BOOT_MAX_S);
@@ -1340,8 +1359,13 @@ void ggs_ble_run_boot(void)
                     set_result("%s", keep);
                 }
             } else {
-                if (op == OP_UNPAIR) do_unpair();
-                else do_provision();
+                if (op == OP_UNPAIR) {
+                    do_unpair();
+                } else {
+                    s_st.job = do_provision() ? GGS_JOB_OK : GGS_JOB_FAILED;
+                    strncpy(s_st.job_addr, s_target, sizeof(s_st.job_addr) - 1);
+                    s_st.job_addr[sizeof(s_st.job_addr) - 1] = '\0';
+                }
                 // A fresh scan afterwards, so the page shows the new state.
                 vTaskDelay(pdMS_TO_TICKS(500));
                 char keep[160];
@@ -1354,6 +1378,8 @@ void ggs_ble_run_boot(void)
             }
         }
     }
+    // Bluetooth never came up: the send job did not happen.
+    if (op == OP_PROVISION && s_st.job == GGS_JOB_PENDING) s_st.job = GGS_JOB_FAILED;
     s_st.pending = false;
     s_st.busy_addr[0] = '\0';
     blog("=== Done -- restarting into normal operation (Bluetooth off) ===");
@@ -1385,6 +1411,11 @@ static bool request(op_t op, const char *addr, uint32_t delay_ms)
         strncpy(s_st.busy_addr, addr, sizeof(s_st.busy_addr) - 1);
     }
     s_st.pending = true;
+    if (op == OP_PROVISION) {
+        s_st.job = GGS_JOB_PENDING;
+        strncpy(s_st.job_addr, addr ? addr : "", sizeof(s_st.job_addr) - 1);
+        s_st.job_addr[sizeof(s_st.job_addr) - 1] = '\0';
+    }
     snprintf(s_st.last_result, sizeof(s_st.last_result), "%s",
              op == OP_SCAN ? "Restarting into Bluetooth to scan..."
            : op == OP_UNPAIR ? "Restarting into Bluetooth to unpair the controller..."

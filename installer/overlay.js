@@ -6,11 +6,12 @@
  * connection (the dialog's Improv client), so nothing else has to open the port:
  *
  *   IP addresses                     what the bridge reports (needs firmware with CMD 0x40)
- *   Send Wi-Fi to device             join a home network
+ *   Send Wi-Fi to GGS Controller     give a Spider Farmer GGS controller (found over Bluetooth) the bridge's hotspot Wi-Fi
+ *   Home Wi-Fi for the bridge        join a home network (what "Send Wi-Fi to device" used to be called)
  *   Connect Wi-Fi & randomize ...    join a home network + new random hotspot password
  *   Randomize SpiderBridge ...       new random hotspot password only
  *
- * The extra commands (0x40..0x42) are SpiderBridge extensions to Improv Wi-Fi
+ * The extra commands (0x40..0x49) are SpiderBridge extensions to Improv Wi-Fi
  * Serial, see firmware/ggs/main/improv_serial.c. Pinned to esp-web-tools 10.4.0:
  * it uses the dialog's _client._sendRPCWithResponse(), which is not public API.
  */
@@ -19,6 +20,7 @@
 
   var SVG_NS = 'http://www.w3.org/2000/svg';
   var CMD = { NETINFO: 0x40, AP_PASS: 0x41, WIFI_AP: 0x42, RESTART: 0x44, DIAG: 0x45 };
+  var G = window.SBGgs;
   var TIMEOUT = { net: 8000, pass: 15000, wifi: 45000, scan: 20000 };
 
   var ICONS = {
@@ -170,7 +172,7 @@
       lines.push([('Home network "' + r[0] + '": ' + r[1] + ' (gateway ' + r[2] + ', ' + r[7] + ' dBm)  ')]
         .concat(homeUrl ? [link(homeUrl)] : []));
     } else {
-      lines.push('Home network: not connected — use "Send Wi-Fi to device"');
+      lines.push('Home network: not connected — use "Home Wi-Fi for the bridge"');
     }
     var apUrl = safeUrl(r[4] ? 'http://' + r[4] + '/' : '');
     lines.push([('Hotspot "' + r[3] + '": ' + r[4] + ', ' + r[6] + ' client(s)  ')]
@@ -241,9 +243,10 @@
 
   // ---- tool dialog (Send Wi-Fi / randomize) -------------------------------
   var TITLES = {
-    wifi: 'Send Wi-Fi to device',
+    wifi: 'Home Wi-Fi for the bridge',
     'wifi-random': 'Connect Wi-Fi & randomize SpiderBridge Wi-Fi password',
-    random: 'Randomize SpiderBridge Wi-Fi password'
+    random: 'Randomize SpiderBridge Wi-Fi password',
+    ggs: 'Send Wi-Fi to GGS Controller'
   };
 
   function openTool(client, mode, onDone) {
@@ -404,7 +407,104 @@
       }
     }
 
-    if (mode === 'random') showRandomConfirm(); else showForm();
+    // -- Send Wi-Fi to GGS Controller: search over Bluetooth, choose, send
+    // The bridge does the Bluetooth work in a start of its own, so each step takes the board off USB for a while.
+    function ggsTicker(label) {
+      return function (s) { var n = body.querySelector('[data-tick]'); if (n) n.textContent = label + ' ' + s + ' s'; };
+    }
+    function ggsProgress(text, label) {
+      busy = true;
+      body.textContent = '';
+      var p = el('p'); p.appendChild(el('span', 'sbo-spin')); p.appendChild(document.createTextNode(text));
+      body.appendChild(p);
+      var tick = el('p', 'sbo-kv'); tick.setAttribute('data-tick', '1'); body.appendChild(tick);
+      body.appendChild(el('p', 'sbo-kv', 'The bridge restarts into Bluetooth for this, so it is silent on USB for a while. ' +
+                                        'Keep this window open.'));
+      setActions(button('Please wait…', false, function () {}));
+      actions.firstChild.disabled = true;
+      return ggsTicker(label);
+    }
+    var ioFor = {
+      rpc: function (cmd, args, ms) { return rpc(client, cmd, args, ms); },
+      sleep: function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); },
+      now: function () { return Date.now(); }
+    };
+
+    function ggsFail(text, back) {
+      busy = false;
+      body.textContent = '';
+      body.appendChild(el('div', 'sbo-msg err', text));
+      setActions(button('Close', false, function () { d.close(); }), button('Back', true, back));
+    }
+
+    function ggsSearch(initial) {
+      var tick = ggsProgress(initial ? 'Looking for Spider Farmer GGS controllers over Bluetooth…' : 'Searching again…', 'Elapsed');
+      G.searchAgain(ioFor, tick).then(function (r) {
+        if (!r.ok) { ggsFail(r.text, ggsIntro); return; }
+        ggsPick(r.controllers, r.text);
+      }).catch(function (e) { ggsFail(explain(e), ggsIntro); });
+    }
+
+    function ggsIntro() {
+      busy = false;
+      body.textContent = '';
+      body.appendChild(el('p', null, 'Gives your Spider Farmer GGS controller the bridge\'s own Wi-Fi (the hotspot), over Bluetooth, ' +
+        'so the controller can talk to the bridge. The controller stays visible over Bluetooth, so you can still connect the ' +
+        'phone and the Spider Farmer app.'));
+      body.appendChild(el('div', 'sbo-msg warn', 'Switch the controller on, hold it close to the board, and make sure no phone is ' +
+        'connected to it right now (a controller that a phone is connected to is invisible to the bridge).'));
+      body.appendChild(el('p', 'sbo-kv', 'The search takes up to a minute: the bridge restarts into Bluetooth and back.'));
+      setActions(button('Cancel', false, function () { d.close(); }), button('Search for controllers', true, function () { ggsSearch(true); }));
+    }
+
+    function ggsPick(list, text) {
+      busy = false;
+      body.textContent = '';
+      if (!list.length) {
+        body.appendChild(el('div', 'sbo-msg warn', 'No GGS controller found. Check that it is switched on, close to the board, and ' +
+          'not connected to a phone, then search again.'));
+        setActions(button('Close', false, function () { d.close(); }), button('Search again', true, function () { ggsSearch(false); }));
+        return;
+      }
+      body.appendChild(el('p', null, list.length === 1 ? 'Found one controller:' : 'Found ' + list.length + ' controllers. Choose the one to set up:'));
+      var lbl = el('label', null, 'Controller'); lbl.setAttribute('for', 'sbo-ggs');
+      var sel = el('select'); sel.id = 'sbo-ggs';
+      list.forEach(function (c, i) { var o = document.createElement('option'); o.value = c.addr; o.textContent = G.describe(c); sel.appendChild(o); });
+      body.appendChild(lbl); body.appendChild(sel);
+      var note = el('p', 'sbo-kv'); body.appendChild(note);
+      function paintNote() {
+        var c = list.filter(function (x) { return x.addr === sel.value; })[0];
+        note.textContent = c && !isNaN(c.rssi) && c.rssi < -75
+          ? 'This one is far away or behind a wall: if the setup fails, move it closer.'
+          : 'Address ' + (c ? c.addr : '');
+      }
+      sel.addEventListener('change', paintNote); paintNote();
+      body.appendChild(el('p', 'sbo-kv', 'Sends the hotspot name and password the bridge has stored. The password is not shown or typed here.'));
+      setActions(button('Cancel', false, function () { d.close(); }),
+                 button('Search again', false, function () { ggsSearch(false); }),
+                 button('Send Wi-Fi', true, function () { ggsSend(sel.value, list); }));
+    }
+
+    function ggsSend(addr, list) {
+      var tick = ggsProgress('Sending the hotspot Wi-Fi to the controller…', 'Elapsed');
+      G.sendToController(ioFor, addr, tick).then(function (r) {
+        if (!r.ok) {
+          ggsFail(r.text + (r.code === 'FAILED' ? ' Nothing is changed on the bridge. Move the controller closer, make sure no phone is connected to it, and try again.' : ''),
+                  function () { ggsPick(list, ''); });
+          return;
+        }
+        busy = false;
+        body.textContent = '';
+        body.appendChild(el('div', 'sbo-msg ok', r.text));
+        body.appendChild(el('p', 'sbo-kv', 'The controller is now on the bridge\'s hotspot and still visible over Bluetooth, so the phone and the ' +
+                                          'Spider Farmer app can still find it. It appears in the bridge\'s web interface within a minute.'));
+        setActions(button('Close', true, function () { d.close(); }));
+        onDone(false);
+      }).catch(function (e) { ggsFail(explain(e), function () { ggsPick(list, ''); }); });
+    }
+
+    if (mode === 'ggs') ggsIntro();
+    else if (mode === 'random') showRandomConfirm(); else showForm();
     d.showModal();
   }
 
@@ -443,8 +543,10 @@
       client.__sboNet = null;
       setLines(net.sbSupport, ['The bridge is restarting. Click here in about 10 seconds to read the addresses again.']);
     };
-    list.insertBefore(makeItem(icon(ICONS.send), 'Send Wi-Fi to device',
-      'Pick a home network and send its password over USB', function () { openTool(client, 'wifi', done); }), logs);
+    list.insertBefore(makeItem(icon(ICONS.send), 'Send Wi-Fi to GGS Controller',
+      'Finds your Spider Farmer controller over Bluetooth and gives it the bridge\'s hotspot Wi-Fi', function () { openTool(client, 'ggs', done); }), logs);
+    list.insertBefore(makeItem(wifi(), 'Home Wi-Fi for the bridge',
+      'Pick your home network and send its password over USB', function () { openTool(client, 'wifi', done); }), logs);
     list.insertBefore(makeItem(wifi(), 'Connect Wi-Fi & randomize SpiderBridge Wi-Fi password',
       'Join the home network and create a new random hotspot password', function () { openTool(client, 'wifi-random', done); }), logs);
     list.insertBefore(makeItem(icon(ICONS.dice), 'Randomize SpiderBridge Wi-Fi password',
