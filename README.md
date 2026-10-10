@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="#"><img src="docs/img/ggs-sketch.png" alt="Hand-drawn sketch: the Spider Farmer GGS grow-tent controller with its LED grow light and plant sensors — this is the device SpiderBridge connects to Home Assistant" width="62%"></a>
+  <a href="#"><img src="docs/img/ggs-sketch.png" alt="Hand-drawn sketch: Spider Farmer GGS inline duct fan in the center, an ESP32 on the left, Home Assistant and MQTT in the middle, and a smartphone running the Spider Farmer app on the right — the path SpiderBridge bridges" width="100%"></a>
 </p>
 
 <p align="center">
