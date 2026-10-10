@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="#"><img src="docs/img/hero.svg" alt="SpiderBridge — grow tent on the left, Spider Farmer GGS controller in the middle, a small ESP32 SpiderBridge talking BLE to the controller and MQTT to Home Assistant on the right" width="100%"></a>
+  <a href="#"><img src="docs/img/ggs-sketch.png" alt="Hand-drawn sketch: the Spider Farmer GGS grow-tent controller with its LED grow light and plant sensors — this is the device SpiderBridge connects to Home Assistant" width="62%"></a>
 </p>
 
 <p align="center">
