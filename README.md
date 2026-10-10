@@ -161,16 +161,27 @@ Three steps, no app and no cloud involved.
 
 1. Open the [web installer](https://matthias1232.github.io/spider-farmer-homeassistant/installer/)
    in **Chrome or Edge** on a desktop computer and plug the board in with a USB *data* cable.
-2. **New board: click "⚡ Quick Connect".** Enter your home Wi-Fi and press *Select board & start*;
-   Chrome opens its serial port list, you choose the board, and the wizard then
-   - installs the newest firmware (erasing the board first, if you leave that ticked),
+2. **Quick Connect** has two buttons, with the same steps; only flashing differs:
+   - **"New board: install + set up"** installs the newest firmware (erasing the board first, if you leave
+     that ticked) and then sets it up.
+   - **"Board already flashed: set up only"** flashes nothing. It restarts the board, checks that it runs
+     SpiderBridge and then sets it up. Use it right after a flash, or for any bridge that has not met a
+     controller yet.
+
+   Enter your home Wi-Fi and press *Select board & ...*; Chrome opens its serial port list, you choose the
+   board, and the wizard
    - joins your home Wi-Fi,
    - gives the bridge's own hotspot a **new random password** (shown once at the end: write it down),
    - and, if the Bluetooth box is ticked, makes the bridge **search for your Spider Farmer GGS
-     controller on its first start and connect it to the hotspot**. The controller stays visible over
-     Bluetooth, so you can still pair your phone and use the Spider Farmer app afterwards. Only
-     controllers heard clearly (stronger than −75 dBm) are touched, and the switch is used up after
-     that one start.
+     controller and connect it to the hotspot**. The controller stays visible over Bluetooth, so you can still
+     pair your phone and use the Spider Farmer app afterwards. Only controllers heard clearly (stronger than
+     -75 dBm) are touched, and the switch is used up after that one start.
+
+   A bridge that is **already in use** (home network set and a controller known) deliberately does not listen
+   for USB commands, because that memory is needed for the controller's connection. "Set up only" then says so
+   and offers *Erase, install firmware and continue*; otherwise change Wi-Fi and the hotspot password in the
+   bridge's web interface. A board with older firmware, or with other firmware, gets an *Install firmware and
+   continue* button instead.
 3. **Already flashed, or want single steps:** click *Open installer & device tools*. The window it opens
    offers *Install*, *IP addresses & status* (home network, hotspot, gateway, signal),
    *Send Wi-Fi to device*, *Connect Wi-Fi & randomize SpiderBridge Wi-Fi password*,

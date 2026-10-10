@@ -44,6 +44,8 @@
   .sbq-steps span.cur{border-color:#8ab4f8;color:#8ab4f8}
   .sbq-steps span.done{border-color:#2f7a4a;color:#9fe0b4}
   .sbq-note{font-size:.8rem;color:#7d848f;margin:.2rem 0 .6rem}
+  .btnrow{display:flex;gap:.6rem;flex-wrap:wrap}
+  .btnrow button{flex:1 1 16rem}
   .sbq-log{max-height:12rem;overflow:auto;background:#0f1116;border:1px solid #2c303a;padding:.5rem;font-size:.72rem;white-space:pre-wrap}
   progress{height:.7rem;margin:.6rem 0}
   ul.tips li{margin:.25rem 0}
@@ -75,11 +77,17 @@
   <p id="moduleHint" class="hint">Auto-detect reads the chip after you connect and installs the
   matching build. Pick a module only if you want to force one.</p>
 
-  <p><strong>New board? Use Quick Connect:</strong> one dialog installs the firmware, joins your home
-  Wi-Fi, creates a new random password for the bridge's hotspot and can connect your GGS controller.</p>
-  <p><button type="button" class="act" id="quickBtn">⚡ Quick Connect — install, Wi-Fi &amp; controller in one go</button></p>
+  <p><strong>Quick Connect</strong> does it all in one dialog: joins your home Wi-Fi, creates a new random
+  password for the bridge's hotspot and can connect your GGS controller over Bluetooth.</p>
+  <p class="btnrow">
+    <button type="button" class="act" id="quickBtn">⚡ Quick Connect — new board: install + set up</button>
+    <button type="button" class="act alt" id="quickSetupBtn">⚡ Quick Connect — board already flashed: set up only</button>
+  </p>
+  <p class="hint">Already running SpiderBridge? Use the second button: nothing is flashed, the board is just restarted and
+  configured. It works on a freshly flashed board, and on any board that has not met a controller yet. A bridge that is
+  already in use deliberately stops listening for USB commands; the wizard tells you and offers to reinstall.</p>
 
-  <p><strong>Or step by step / manage a board that is already set up:</strong></p>
+  <p><strong>Or step by step / manage a board that is already set up</strong> (IP addresses, single Wi-Fi or password changes, console):</p>
   <ol>
     <li>Plug the board into this computer with a <strong>USB data cable</strong>
         (a charge-only cable shows no port).</li>
@@ -218,14 +226,16 @@
 
   // Quick Connect wizard (installer/quickconnect.js). Always uses the auto-detect manifest when
   // available, so the chip decides which build is flashed, unless a module was picked.
-  document.getElementById('quickBtn').addEventListener('click', function () {
+  function openQuick(mode) {
     if (!window.isSecureContext || !('serial' in navigator)) {
       show('warn', 'Quick Connect needs <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> on a desktop computer, on an HTTPS page.');
       return;
     }
     if (!window.SBQuickConnect) { show('err', 'The Quick Connect script has not loaded yet. Reload the page and try again.'); return; }
-    window.SBQuickConnect.open({ manifestUrl: manifest });
-  });
+    window.SBQuickConnect.open({ manifestUrl: manifest, mode: mode });
+  }
+  document.getElementById('quickBtn').addEventListener('click', function () { openQuick('flash'); });
+  document.getElementById('quickSetupBtn').addEventListener('click', function () { openQuick('setup'); });
 
   var box = document.getElementById('statusBox');
   function show(kind, html) { box.className = 'status show ' + kind; box.innerHTML = html; }

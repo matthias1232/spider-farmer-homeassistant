@@ -27,12 +27,17 @@
 
   var TEXT = {
     UNABLE_TO_CONNECT: 'The board could not join that Wi-Fi network. Check the name and the password, and that it is a ' +
-      '2.4 GHz network. The new firmware is installed; nothing else was changed.',
+      '2.4 GHz network. Nothing else was changed on the board.',
     INVALID_RPC_PACKET: 'The board rejected the values.',
-    UNKNOWN_RPC_COMMAND: 'The firmware on the board is too old for Quick Connect.',
+    UNKNOWN_RPC_COMMAND: 'The firmware on this board is older than this wizard: it cannot randomize the hotspot password ' +
+      'or search for controllers. Install the current firmware first.',
+    NOT_SPIDERBRIDGE: 'The board answers over USB, but it is not running SpiderBridge firmware. Install the firmware first.',
     TIMEOUT: 'The board did not answer in time.',
     UNKNOWN_ERROR: 'The board reported an unknown error.'
   };
+
+  // Failures after which "install the firmware and continue" is the right next step.
+  var OFFER_INSTALL = { UNKNOWN_RPC_COMMAND: 1, NOT_SPIDERBRIDGE: 1, FOREIGN_FIRMWARE: 1, LISTENER_OFF: 1 };
 
   // ---- generic helpers ----------------------------------------------------
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
@@ -45,8 +50,31 @@
   }
 
   function explain(e) {
+    if (e && e.detail) return e.detail;
     var k = (e && e.improv) || (typeof e === 'string' ? e : e && e.message) || String(e);
-    return TEXT[k] || k;
+    return TEXT[k] || (e && e.message) || k;
+  }
+
+  // What the board printed while we waited tells us why it did not answer over USB.
+  // Returns { code, detail }.
+  function diagnose(link) {
+    var t = String((link && link.rawText) || ''), seen = (link && link.seen) || {};
+    if (seen.off) {
+      return { code: 'LISTENER_OFF', detail: 'This SpiderBridge is already set up and knows a controller, so it deliberately does not ' +
+        'listen for USB commands (that memory is needed for the controller\'s connection). Change Wi-Fi and the hotspot password in its ' +
+        'web interface instead (join its hotspot and open http://192.168.10.1). Or install the firmware again with "Erase the board" ' +
+        'ticked: that removes the settings and the known controllers, and Quick Connect then works.' };
+    }
+    if (seen.ready || seen.app) {
+      return { code: 'NO_ANSWER', detail: 'The board runs SpiderBridge but did not answer. It listens for 5 minutes after power-up: press its ' +
+        'reset button, wait about 20 seconds and try again.' };
+    }
+    if (t.replace(/\s+/g, '').length > 20) {
+      return { code: 'FOREIGN_FIRMWARE', detail: 'The board is running other firmware (it printed text, but nothing from SpiderBridge). ' +
+        'Install the SpiderBridge firmware first.' };
+    }
+    return { code: 'NO_ANSWER', detail: 'The board did not answer and printed nothing at 115200 baud. Check that you picked the right port and ' +
+      'use a USB data cable, press the board\'s reset button and try again.' };
   }
 
   // 15-character hotspot password with the same alphabet and rules as the firmware
@@ -81,6 +109,9 @@
     this.reader = null;
     this.writer = null;
     this.closed = false;
+    this.rawText = '';        // the last few KB the board printed, for diagnosing silence
+    this.seen = { off: false, ready: false, app: false };   // key log lines, remembered for good
+    this.tail = '';
   }
 
   ImprovLink.prototype.start = function () {
@@ -102,6 +133,14 @@
   // Packet: "IMPROV" 01 type len data... checksum, then '\n'. Text (the firmware's log lines)
   // is mixed in the same stream, so re-synchronise on the header after every byte.
   ImprovLink.prototype._feed = function (chunk) {
+    var s = '';
+    for (var k = 0; k < chunk.length; k++) s += String.fromCharCode(chunk[k]);
+    this.rawText = (this.rawText + s).slice(-6000);
+    var win = this.tail + s;                       // a line may be split across two chunks
+    if (/Improv\) off: bridge configured and controllers known/.test(win)) this.seen.off = true;
+    if (/Improv\) ready on the USB port/.test(win)) this.seen.ready = true;
+    if (/SpiderBridge-ESP32 v2/.test(win)) this.seen.app = true;
+    this.tail = win.slice(-100);
     for (var i = 0; i < chunk.length; i++) {
       this.buf.push(chunk[i]);
       for (;;) {
@@ -237,16 +276,19 @@
   }
 
   // ---- the wizard dialog --------------------------------------------------
-  var STEPS = ['Board', 'Wi-Fi', 'Install', 'Done'];
+  var STEPS_FULL = ['Board', 'Wi-Fi', 'Install', 'Done'];
+  var STEPS_SET = ['Board', 'Wi-Fi', 'Setup', 'Done'];
 
   function open(options) {
     options = options || {};
     var manifestUrl = options.manifestUrl;
+    var flashMode = options.mode !== 'setup';   // false: the board already runs SpiderBridge, do not flash
     var d = document.createElement('dialog');
     d.className = 'sbo sbq';
-    var head = el('div', 'sbo-head'); head.appendChild(el('h2', null, 'Quick Connect'));
-    var bar = el('div', 'sbq-steps'); STEPS.forEach(function (s, i) { bar.appendChild(el('span', null, (i + 1) + ' ' + s)); });
-    head.appendChild(bar);
+    var h2 = el('h2', null, 'Quick Connect'); var head = el('div', 'sbo-head'); head.appendChild(h2);
+    var bar = el('div', 'sbq-steps'); head.appendChild(bar);
+    function paintBar() { bar.textContent = ''; (flashMode ? STEPS_FULL : STEPS_SET).forEach(function (s, i) { bar.appendChild(el('span', null, (i + 1) + ' ' + s)); }); h2.textContent = flashMode ? 'Quick Connect — install & set up' : 'Quick Connect — set up (no flashing)'; }
+    paintBar();
     var body = el('div', 'sbo-body'), actions = el('div', 'sbo-actions');
     d.appendChild(head); d.appendChild(body); d.appendChild(actions);
     var busy = false, port = null;
@@ -262,8 +304,15 @@
     // -- step 1/2: form
     function form(prev) {
       busy = false; mark(0); body.textContent = '';
-      body.appendChild(el('p', null, 'Installs the newest SpiderBridge firmware, joins your home Wi-Fi and gives the bridge\'s own ' +
-        'hotspot a new random password — in one go.'));
+      var sw = el('label', 'chk'); var swBox = el('input'); swBox.type = 'checkbox'; swBox.id = 'sbq-flash'; swBox.checked = flashMode;
+      sw.appendChild(swBox); sw.appendChild(document.createTextNode('Install the newest firmware first (new board or update)'));
+      var swNote = el('p', 'sbq-note');
+      function paintIntro() {
+        swNote.textContent = flashMode
+          ? 'Installs the newest SpiderBridge firmware, joins your home Wi-Fi and gives the bridge\'s own hotspot a new random password — in one go.'
+          : 'The board already runs SpiderBridge firmware: nothing is flashed. It joins your home Wi-Fi, gets a new random hotspot password and can connect your GGS controller. The board is restarted first so that it listens for these commands.';
+      }
+      body.appendChild(sw); body.appendChild(swNote);
       var lblNet = el('label', null, 'Home Wi-Fi name'); lblNet.setAttribute('for', 'sbq-ssid');
       var ssid = el('input'); ssid.type = 'text'; ssid.id = 'sbq-ssid'; ssid.maxLength = 32; ssid.autocomplete = 'off'; ssid.spellcheck = false;
       var lblPw = el('label', null, 'Home Wi-Fi password'); lblPw.setAttribute('for', 'sbq-pw');
@@ -276,20 +325,33 @@
         'The controller must be switched on, close to the board, and not connected to a phone right now.');
       var erase = el('label', 'chk'); var eraseBox = el('input'); eraseBox.type = 'checkbox'; eraseBox.checked = true;
       erase.appendChild(eraseBox); erase.appendChild(document.createTextNode('Erase the board first (recommended for a new board; removes old settings)'));
+      var bleLabel = ble.lastChild;
+      function paintMode() {
+        flashMode = swBox.checked;
+        erase.style.display = flashMode ? '' : 'none';
+        bleLabel.nodeValue = flashMode ? 'On the first start, search for Spider Farmer GGS controllers over Bluetooth and connect them to the bridge'
+                                       : 'After the restart, search for Spider Farmer GGS controllers over Bluetooth and connect them to the bridge';
+        go.textContent = flashMode ? 'Select board & start' : 'Select board & set up';
+        paintBar(); paintIntro();
+      }
       var err = el('div', 'sbo-msg err'); err.style.display = 'none';
       [lblNet, ssid, lblPw, pw, show, ble, bleNote, erase, err].forEach(function (n) { body.appendChild(n); });
       if (prev) { ssid.value = prev.ssid; pw.value = prev.pw; bleBox.checked = prev.ble; eraseBox.checked = prev.erase; }
+      var go;
 
-      function go() {
+      function submit() {
         var te = new TextEncoder(), p = '';
         if (!ssid.value.trim()) p = 'Enter the name of your home Wi-Fi.';
         else if (te.encode(ssid.value.trim()).length > 32) p = 'The Wi-Fi name is longer than 32 bytes.';
         else if (pw.value.length < 8 || te.encode(pw.value).length > 64) p = 'A Wi-Fi password has 8 to 64 characters.';
         if (p) { err.textContent = p; err.style.display = ''; return; }
-        run({ ssid: ssid.value.trim(), pw: pw.value, ble: bleBox.checked, erase: eraseBox.checked });
+        run({ ssid: ssid.value.trim(), pw: pw.value, ble: bleBox.checked, erase: eraseBox.checked, flash: flashMode });
       }
-      pw.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
-      acts(btn('Cancel', false, function () { d.close(); }), btn('Select board & start', true, go));
+      pw.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
+      go = btn('Select board & start', true, submit);
+      swBox.addEventListener('change', paintMode);
+      acts(btn('Cancel', false, function () { d.close(); }), go);
+      paintMode();
     }
 
     // -- step 3: do it
@@ -311,20 +373,37 @@
             port = await navigator.serial.requestPort();
           }
           mark(2);
-          var res = await (options._flash || flash)(port, manifestUrl, { erase: v.erase, log: function (s) { log.textContent += s + '\n'; } }, step);
-          bar2.style.display = 'none';
-          step('Waiting for the new firmware to start… (about 10 seconds)');
-          // flash() closed the transport; reopen the port for Improv
-          await sleep(1500);
-          await port.open({ baudRate: SERIAL_BAUD, bufferSize: 8192 });
+          var res;
+          if (v.flash) {
+            res = await (options._flash || flash)(port, manifestUrl, { erase: v.erase, log: function (s) { log.textContent += s + '\n'; } }, step);
+            bar2.style.display = 'none';
+            step('Waiting for the new firmware to start… (about 10 seconds)');
+            // flash() closed the transport; reopen the port for Improv
+            await sleep(1500);
+            await port.open({ baudRate: SERIAL_BAUD, bufferSize: 8192 });
+          } else {
+            // No flashing. A bridge only listens for USB commands for a few minutes after power-up,
+            // so restart it first (the serial control lines pulse the reset pin on most boards).
+            step('Restarting the board so that it listens for commands…');
+            await port.open({ baudRate: SERIAL_BAUD, bufferSize: 8192 });
+            try { await port.setSignals({ dataTerminalReady: false, requestToSend: true }); await sleep(150); await port.setSignals({ requestToSend: false }); } catch (e) { /* no control lines */ }
+            res = { chip: '', version: '' };
+          }
           var link = new ImprovLink(port); link.start();
           try {
-            await waitForImprov(link, 30000);
+            try { await waitForImprov(link, 40000); }
+            catch (e) { throw Object.assign(new Error(e.message), diagnose(link), { improv: undefined }); }
+            if (!v.flash) {
+              step('Checking the firmware…');
+              var info = await link.call(CMD.INFO, [], 4000);
+              res.chip = info[2] || 'ESP32'; res.version = info[1] || '';
+              if (info[0] !== 'SpiderBridge') throw Object.assign(new Error('NOT_SPIDERBRIDGE'), { improv: 'NOT_SPIDERBRIDGE' });
+            }
             step('Sending the Wi-Fi settings and the new hotspot password… (up to 30 seconds)');
             var r = await link.call(CMD.WIFI_AP, enc([v.ssid, v.pw, password, v.ble ? '1' : '0']), 45000);
             // the board restarts about 2.5 s after answering
             await link.close(); try { await port.close(); } catch (e) {}
-            var result = { chip: res.chip, version: res.version, url: r[0] || '', apSsid: r[1] || 'SpiderBridge', apPass: r[2] || password, ble: v.ble, ssid: v.ssid };
+            var result = { flashed: v.flash, chip: res.chip, version: res.version, url: r[0] || '', apSsid: r[1] || 'SpiderBridge', apPass: r[2] || password, ble: v.ble, ssid: v.ssid };
             step('The board is restarting…');
             await sleep(options._settleMs != null ? options._settleMs : 9000);
             done(result);
@@ -339,6 +418,10 @@
     async function waitForImprov(link, ms) {
       var t0 = Date.now(), last;
       while (Date.now() - t0 < ms) {
+        if (link.seen.off) break;      // the firmware just said it will not listen: no point waiting
+        // The board printed its boot text, none of it from SpiderBridge, and has been quiet since: other
+        // firmware. SpiderBridge announces itself within ~3 s of a reset, so 15 s of foreign text is enough.
+        if (Date.now() - t0 > 15000 && !link.seen.app && !link.seen.ready && link.rawText.replace(/\s+/g, '').length > 20) break;
         try { await link.call(CMD.STATE, [], 1500); return; } catch (e) { last = e; await sleep(800); }
       }
       throw Object.assign(new Error('The new firmware did not answer over USB. Press the board\'s reset button and try Quick Connect again.'), { improv: 'TIMEOUT' });
@@ -355,19 +438,34 @@
         v.__log.hidden = false; det.appendChild(v.__log); body.appendChild(det);
       }
       if (e && e.boot) body.appendChild(el('p', 'sbq-note', 'Some boards enter download mode on their own; this one needs the BOOT button held while the connection starts.'));
-      acts(btn('Close', false, function () { d.close(); }), btn('Try again', true, function () { form(v); }));
+      var again = btn('Try again', true, function () { form(v); });
+      var code = e && (e.code || e.improv);
+      if (!v.flash && code && OFFER_INSTALL[code]) {
+        var inst = btn(code === 'LISTENER_OFF' ? 'Erase, install firmware and continue' : 'Install firmware and continue', true,
+          function () {
+            v.flash = true; flashMode = true;
+            // Wiping the board is only done where the button says so; otherwise keep the user's settings.
+            v.erase = code === 'LISTENER_OFF';
+            paintBar(); h2.textContent = 'Quick Connect \u2014 install & set up';
+            run(v);
+          });
+        again.className = '';
+        acts(btn('Close', false, function () { d.close(); }), again, inst);
+      } else {
+        acts(btn('Close', false, function () { d.close(); }), again);
+      }
     }
 
     // -- step 4: result
     function done(r) {
       busy = false; mark(3); body.textContent = '';
-      body.appendChild(el('div', 'sbo-msg ok', 'Done. ' + r.chip + ' is running the new firmware and joined "' + r.ssid + '".'));
+      body.appendChild(el('div', 'sbo-msg ok', 'Done. ' + (r.flashed ? (r.chip + ' is running the new firmware and ') : 'The board ') + 'joined "' + r.ssid + '".'));
       var kv = function (k, v) { var p = el('p', 'sbo-kv'); p.appendChild(document.createTextNode(k + ' ')); var b = el('b'); if (v && v.nodeType) b.appendChild(v); else b.textContent = v; p.appendChild(b); body.appendChild(p); };
       if (/^http:\/\/\d{1,3}(\.\d{1,3}){3}\/?$/.test(r.url)) { var a = el('a', null, r.url); a.href = r.url; a.target = '_blank'; a.rel = 'noopener'; a.style.color = '#8ab4f8'; kv('Web interface:', a); }
       body.appendChild(el('p', 'sbo-kv', 'Hotspot "' + r.apSsid + '" — new password (shown only now, write it down):'));
       body.appendChild(el('div', 'sbo-secret', r.apPass));
       if (r.ble) {
-        body.appendChild(el('div', 'sbo-msg warn', 'Bluetooth: on its first start the bridge now searches for your GGS controller (about 20 seconds) and connects it to the hotspot. ' +
+        body.appendChild(el('div', 'sbo-msg warn', 'Bluetooth: after the restart the bridge searches for your GGS controller (about 20 seconds) and connects it to the hotspot. ' +
           'The controller stays visible over Bluetooth, so you can still connect your phone and the Spider Farmer app. ' +
           'No controller found? Switch it on close to the board, make sure no phone is connected to it, and use "Scan" on the bridge\'s Control page.'));
       }
@@ -383,6 +481,6 @@
 
   window.SBQuickConnect = {
     open: open,
-    _test: { randomHotspotPassword: randomHotspotPassword, ImprovLink: ImprovLink, enc: enc, CMD: CMD }
+    _test: { randomHotspotPassword: randomHotspotPassword, ImprovLink: ImprovLink, enc: enc, CMD: CMD, diagnose: diagnose }
   };
 })();

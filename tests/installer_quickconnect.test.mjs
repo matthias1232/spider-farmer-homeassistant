@@ -106,5 +106,36 @@ function link(replyHex, onWrite) {
   check(err && err.improv === 'TIMEOUT', 'corrupted checksum is ignored');
 }
 
+
+// 8) "no answer" is explained from what the board printed (the exact log lines of the firmware)
+{
+  const { diagnose } = sandbox.SBQuickConnect._test;
+  const mk = () => new ImprovLink({ readable: {}, writable: {} });
+  const feed = (l, s) => l._feed(new TextEncoder().encode(s));
+
+  let l = mk();
+  feed(l, 'I (812) app_main: SpiderBridge-ESP32 v2 0.0.0+a05be90 starting (IDF v5.2)\r\nI (4311) improv: Serial Wi-Fi setup (Improv) off: bridge configured and controllers known\r\n');
+  check(l.seen.off === true && diagnose(l).code === 'LISTENER_OFF', 'diagnose: configured bridge with known controllers -> LISTENER_OFF');
+  check(/web interface/.test(diagnose(l).detail) && /Erase the board/.test(diagnose(l).detail), 'diagnose: LISTENER_OFF tells the user what to do instead');
+
+  l = mk();
+  feed(l, 'I (4311) improv: Serial Wi-Fi setup (Improv) off: bridge conf');   // split in the middle of the line
+  feed(l, 'igured and controllers known\r\n');
+  check(l.seen.off === true, 'log line split across two chunks is still recognised');
+
+  l = mk();
+  feed(l, 'I (812) app_main: SpiderBridge-ESP32 v2 0.0.0+a05be90 starting (IDF v5.2)\r\nI (4400) improv: Serial Wi-Fi setup (Improv) ready on the USB port for 5 minutes\r\n');
+  check(l.seen.ready && diagnose(l).code === 'NO_ANSWER' && /reset button/.test(diagnose(l).detail), 'diagnose: SpiderBridge that is listening but silent -> NO_ANSWER (reset hint)');
+
+  l = mk();
+  feed(l, 'ets Jun  8 2016 00:22:57\r\nrst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)\r\nconfigsip: 0, SPIWP:0xee\r\nESP-IDF v3.0.3\r\n');
+  check(diagnose(l).code === 'FOREIGN_FIRMWARE', 'diagnose: other firmware (the board on COM3) -> FOREIGN_FIRMWARE');
+
+  check(diagnose(mk()).code === 'NO_ANSWER' && /nothing/.test(diagnose(mk()).detail), 'diagnose: silence -> NO_ANSWER (cable / port hint)');
+  // the flag survives later output pushing the line out of the rolling buffer
+  l = mk(); feed(l, 'improv: Serial Wi-Fi setup (Improv) off: bridge configured and controllers known\r\n'); feed(l, 'x'.repeat(9000));
+  check(l.seen.off === true && diagnose(l).code === 'LISTENER_OFF', 'flags outlive the rolling text buffer');
+}
+
 console.log(failures ? failures + ' FAILURE(S)' : 'ALL quickconnect tests passed');
 process.exit(failures ? 1 : 0);
