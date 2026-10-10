@@ -29,6 +29,11 @@ bool sv_why_is_unhealthy(sv_why_t why)
     }
 }
 
+bool sv_why_clears_streak(sv_why_t why)
+{
+    return why == SV_WHY_USER;
+}
+
 uint32_t sv_next_streak(uint32_t prev, bool prev_unhealthy, bool prev_was_healthy_run)
 {
     // A run that stayed up long enough proves the firmware works, whatever ended it.

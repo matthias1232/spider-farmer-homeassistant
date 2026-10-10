@@ -129,6 +129,9 @@ static void force_task(void *arg)
 void sv_restart(sv_why_t why)
 {
     s_rtc.sv_why = (uint32_t)why;
+    // The owner stepping in (restart, update) is a fresh start: safe mode ends and the loop counter
+    // begins again. If the image still crashes, three more starts bring safe mode back.
+    if (sv_why_clears_streak(why)) s_rtc.streak = 0;
     ESP_LOGW(TAG, "Restarting (reason %d)", (int)why);
     // Armed BEFORE the clean path, so a clean path that blocks cannot prevent the reset.
     xTaskCreate(force_task, "sv_force", 2048, NULL, configMAX_PRIORITIES - 1, NULL);

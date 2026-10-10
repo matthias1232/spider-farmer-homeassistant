@@ -79,6 +79,13 @@ int main(void)
       bool h[4] = { true, false, false, false };
       CHECK(streak_after(r, w, h, 4) >= SV_LOOP_LIMIT); }
 
+    // only the owner restarting or updating clears the counter (and so ends safe mode)
+    CHECK(sv_why_clears_streak(SV_WHY_USER));
+    CHECK(!sv_why_clears_streak(SV_WHY_HEARTBEAT));
+    CHECK(!sv_why_clears_streak(SV_WHY_LOW_HEAP));
+    CHECK(!sv_why_clears_streak(SV_WHY_BLE_TIMEOUT));
+    CHECK(!sv_why_clears_streak(SV_WHY_UPLINK));
+    CHECK(!sv_why_clears_streak(SV_WHY_NONE));
     // stuck-task rule: 6 periods + 30 s
     CHECK(!sv_task_stuck(100, 100, 1));
     CHECK(!sv_task_stuck(135, 100, 1));    // 35 s late, limit 36

@@ -9,6 +9,7 @@
 #include "esp_heap_caps.h"
 #include "esp_random.h"
 #include "esp_system.h"
+#include "esp_ota_ops.h"
 #include "esp_attr.h"
 #include "esp_bt.h"
 #include "freertos/FreeRTOS.h"
@@ -1359,6 +1360,13 @@ void ggs_ble_run_boot(void)
     memset(s_secret, 0, sizeof(s_secret));
     blog_save();
     ESP_LOGW(TAG, "Bluetooth boot done -- restarting into normal operation");
+    // Every start begins with this Bluetooth-only boot and restarts BEFORE the normal boot's own
+    // esp_ota_mark_app_valid_cancel_rollback() can run. With rollback enabled the bootloader treats any
+    // restart of a not-yet-confirmed image as a failed start and returns to the previous firmware, so
+    // every over-the-air update used to be undone right here. Reaching this point means the image
+    // started, initialised Bluetooth and finished its job: that is the confirmation. A crash or a
+    // stall before this line (the guard timer, a panic) still ends in a rollback, as intended.
+    esp_ota_mark_app_valid_cancel_rollback();
     vTaskDelay(pdMS_TO_TICKS(300));
     sv_restart(SV_WHY_NONE);
 }

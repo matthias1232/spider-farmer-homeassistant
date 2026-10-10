@@ -93,6 +93,8 @@ bool sv_reason_is_unhealthy(int esp_reset_reason);
 // Was a supervisor-initiated restart the answer to something broken (stuck task, leak, stalled
 // Bluetooth boot)? A restart the user asked for or an uplink outage is not.
 bool sv_why_is_unhealthy(sv_why_t why);
+// Does a restart for this reason start the loop counter afresh? (the owner restarting or updating)
+bool sv_why_clears_streak(sv_why_t why);
 // New streak value after a boot, given the previous streak and what ended the last run.
 uint32_t sv_next_streak(uint32_t prev, bool prev_unhealthy, bool prev_was_healthy_run);
 // Is this task stuck?
