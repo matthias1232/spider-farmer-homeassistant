@@ -68,7 +68,7 @@ typedef struct {
     char     reset_text[24];     // "Power on", "Task watchdog", ...
     uint32_t boots;              // boots since the last factory reset (persistent)
     uint32_t crash_streak;       // restarts in a row without a healthy run
-    uint32_t crashes;            // unhealthy resets (panic, watchdogs, brownout) in total
+    uint32_t crashes;            // failures in total: panic, watchdogs, brownout, and hangs the supervisor ended
     bool     safe_mode;
     sv_why_t last_sv_why;        // why the supervisor itself restarted last time
     char     last_sv_task[16];   // which task, for SV_WHY_HEARTBEAT

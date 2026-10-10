@@ -45,7 +45,15 @@ def frame(cmd, args=b""):
 
 class Link:
     def __init__(self, port):
-        self.s = serial.Serial(port, 115200, timeout=0.2)
+        # Windows releases a port a moment after the previous process closed it: retry briefly.
+        for attempt in range(10):
+            try:
+                self.s = serial.Serial(port, 115200, timeout=0.2)
+                break
+            except serial.SerialException:
+                if attempt == 9:
+                    raise
+                time.sleep(1.0)
         self.s.dtr = True
         self.s.rts = True            # both asserted = run (no reset, no download mode)
         self.buf = b""
@@ -58,7 +66,7 @@ class Link:
             if d:
                 self.buf += d
                 self.text += d.decode("ascii", "replace")
-                self.text = self.text[-20000:]
+                self.text = self.text[-60000:]
 
     def _result(self, cmd):
         """Pop the newest RPC result frame for cmd out of the buffer, or None."""
@@ -117,73 +125,113 @@ def diag(link):
     return dict(zip(k, r))
 
 
+SV_REASON_RE = re.compile(r"restarted the bridge last time: reason (\d+) ?(\S*)")
+
+
+def inject(link, kind):
+    link.buf = b""
+    link.s.write(frame(CMD_FAULT, bytes([10]) + b"CRASH-TEST" + bytes([len(kind)]) + kind.encode()))
+    link.pump(0.8)
+
+
+def wait_restart(link, boots_before, max_wait, settle_s=16):
+    """Wait until the bridge has restarted (its start counter grew), then until it is settled again.
+
+    A start is a Bluetooth-only boot followed by a normal one (two counts), unless it ends in safe mode
+    (one count). "Settled" = it answers and has been up long enough to be past both.
+    Returns (seconds until settled, diag) or (None, None).
+    """
+    t0 = time.time()
+    d = None
+    while time.time() - t0 < max_wait:
+        r = link.call(CMD_DIAG, 1.5)
+        if r and len(r) >= 11:
+            d = dict(zip("reason boots streak crashes safe why task uptime heap heap_min largest".split(), r))
+            if int(d["boots"]) > boots_before and int(d["uptime"]) >= settle_s:
+                return time.time() - t0, d
+        else:
+            link.pump(0.5)
+    return None, None
+
+
 def run_faults(link, which, max_wait):
-    """Inject each fault, wait for the board to come back by itself, and verify what the firmware recorded."""
-    expect = {   # fault -> (how the firmware must report the restart, which counter must have grown)
-        "panic":    ("Crash",              "crashes"),
-        "taskwdt":  ("Task watchdog",      "crashes"),
-        "intwdt":   ("Interrupt watchdog", "crashes"),
-        "deadlock": ("Software restart",   None),
-        "leak":     ("Software restart",   None),
+    """Inject each fault, wait for the board to restart AND settle by itself, and check what it recorded."""
+    # fault -> (reason the FIRST start after it must report, does the crash counter grow, supervisor code or None)
+    expect = {
+        "panic":    ("Crash",              True,  None),
+        "taskwdt":  ("Task watchdog",      True,  None),
+        "intwdt":   ("Interrupt watchdog", True,  None),
+        "deadlock": ("Software restart",   False, "1"),
+        "leak":     ("Software restart",   False, "2"),
     }
     fails = 0
-    d = diag(link)
-    print("%-10s %-9s %-20s %-8s %-8s %s" % ("fault", "recover", "recorded as", "crashes", "streak", "verdict"))
+    print("%-9s %-9s %-20s %-9s %-7s %-12s %s" % ("fault", "settled", "first start says", "crashes", "streak", "supervisor", "verdict"))
     for kind in which:
-        before = int(d["crashes"])
+        # a clean start first: the owner restarts, which also clears the loop counter
+        link.call(CMD_RESTART, 3.0)
+        if link.wait_alive(60) is None:
+            print("%-9s the board did not come back from a plain restart" % kind)
+            return fails + 1, None
+        time.sleep(14)                       # past the Bluetooth boot
+        d0 = diag(link)
+        before_boots, before_crashes = int(d0["boots"]), int(d0["crashes"])
         link.text = ""
-        link.buf = b""
-        link.s.write(frame(CMD_FAULT, bytes([10]) + b"CRASH-TEST" + bytes([len(kind)]) + kind.encode()))
-        link.pump(1.0)
-        t0 = time.time()
-        # the board must NOT answer for a moment (it is failing), then answer again without help
-        time.sleep(2.0)
-        back = link.wait_alive(max_wait)
-        took = time.time() - t0
-        d = diag(link) if back is not None else None
-        want_reason, grew = expect[kind]
-        ok = back is not None and d is not None and d["safe"] == "0" and d["reason"] == want_reason
-        if ok and grew:
-            ok = int(d["crashes"]) == before + 1
-        if ok and kind in ("deadlock", "leak"):
-            ok = d["why"] in ("1", "2")        # the supervisor says why it restarted
-        if not ok: fails += 1
-        print("%-10s %-9s %-20s %-8s %-8s %s" % (
-            kind, ("%.1fs" % took) if back is not None else "NONE", (d or {}).get("reason", "-"),
-            (d or {}).get("crashes", "-"), (d or {}).get("streak", "-"), "ok" if ok else "FAIL"))
+        inject(link, kind)
+        took, d = wait_restart(link, before_boots, max_wait)
+        starts = START_RE.findall(link.text)
+        first = starts[0][0] if starts else "?"
+        sv = SV_REASON_RE.findall(link.text)
+        sv_code = sv[0][0] if sv else None
+        want_reason, grows, want_sv = expect[kind]
+        # Every injected fault is a failure, so the crash counter grows by exactly one for all of them
+        # (a hang the supervisor ended counts like a crash the hardware ended).
+        ok = d is not None and d["safe"] == "0" and first == want_reason and int(d["crashes"]) == before_crashes + 1
+        if ok and want_sv:
+            ok = sv_code == want_sv
+        if not ok:
+            fails += 1
+        print("%-9s %-9s %-20s %-9s %-7s %-12s %s" % (
+            kind, ("%.1fs" % took) if took is not None else "NEVER", first,
+            (d or {}).get("crashes", "-"), (d or {}).get("streak", "-"),
+            ("%s %s" % (sv[0][0], sv[0][1])).strip() if sv else "-", "ok" if ok else "FAIL"))
         sys.stdout.flush()
         if d is None:
-            break
+            return fails, None
     return fails, d
 
 
 def run_safe_mode(link, max_wait):
     """Three crashes in a row must end in safe mode; a restart from the owner must leave it."""
     fails = 0
+    link.call(CMD_RESTART, 3.0)
+    if link.wait_alive(60) is None:
+        return 1, None
+    time.sleep(14)
     d = diag(link)
     print("\nboot-loop check: three crashes in a row, none of them reaching the healthy mark")
     for i in range(1, 4):
-        link.buf = b""
-        link.s.write(frame(CMD_FAULT, bytes([10]) + b"CRASH-TEST" + bytes([5]) + b"panic"))
-        link.pump(1.0)
-        time.sleep(2.0)
-        back = link.wait_alive(max_wait)
-        d = diag(link) if back is not None else None
-        print("  crash %d: answer=%s streak=%s safe=%s" % (i, "%.1fs" % back if back is not None else "NONE",
-                                                         (d or {}).get("streak", "-"), (d or {}).get("safe", "-")))
+        boots = int(d["boots"])
+        link.text = ""
+        inject(link, "panic")
+        # the third crash ends in safe mode, which has no Bluetooth boot: it settles sooner
+        took, d = wait_restart(link, boots, max_wait, settle_s=8)
         if d is None:
+            print("  crash %d: the board never came back" % i)
             return fails + 1, None
+        print("  crash %d: back after %.1fs, streak=%s safe=%s" % (i, took, d["streak"], d["safe"]))
     if d["safe"] != "1":
-        print("  FAIL: not in safe mode after three crashes"); fails += 1
+        print("  FAIL: not in safe mode after three crashes")
+        fails += 1
     else:
         print("  ok: SAFE MODE entered, the console still answers")
+    boots = int(d["boots"])
     link.call(CMD_RESTART, 3.0)
-    back = link.wait_alive(max_wait)
-    d = diag(link) if back is not None else None
+    took, d = wait_restart(link, boots, max_wait)
     if d is None or d["safe"] != "0" or d["streak"] != "0":
-        print("  FAIL: a restart from the owner did not leave safe mode (%s)" % d); fails += 1
+        print("  FAIL: a restart from the owner did not leave safe mode (%s)" % d)
+        fails += 1
     else:
-        print("  ok: a restart from the owner left safe mode (streak 0)")
+        print("  ok: a restart from the owner left safe mode (streak 0, back after %.1fs)" % took)
     return fails, d
 
 
@@ -193,7 +241,7 @@ def main():
     ap.add_argument("--cycles", type=int, default=10)
     ap.add_argument("--mode", choices=["command", "hard", "fault"], default="command")
     ap.add_argument("--fault", choices=FAULTS, help="with --mode fault: only this one (default: all)")
-    ap.add_argument("--max-wait", type=int, default=45, help="seconds a restart may take until USB answers")
+    ap.add_argument("--max-wait", type=int, default=45, help="seconds a restart may take until USB answers (faults: the supervisor needs up to 100 s for a leak)")
     a = ap.parse_args()
 
     link = Link(a.port)
