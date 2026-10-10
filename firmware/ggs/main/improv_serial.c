@@ -16,6 +16,7 @@
 #include "improv_serial.h"
 #include "ggs_ble.h"
 #include "supervisor.h"
+#include "fault_inject.h"
 
 static const char *TAG = "improv";
 
@@ -33,7 +34,8 @@ enum { CMD_WIFI = 0x01, CMD_STATE = 0x02, CMD_INFO = 0x03, CMD_SCAN = 0x04,
                                // optional last string "1" = quick connect, see below
        CMD_X_BLE     = 0x43, // -> Bluetooth side: armed flag, last result, controllers found
        CMD_X_RESTART = 0x44, // restart the bridge (answers first)
-       CMD_X_DIAG    = 0x45 }; // -> why it last restarted, restart counters, heap, uptime
+       CMD_X_DIAG    = 0x45, // -> why it last restarted, restart counters, heap, uptime
+       CMD_X_FAULT   = 0x46 }; // ["CRASH-TEST"]["panic|taskwdt|intwdt|deadlock|leak"] self-test, see fault_inject.h
 enum { ST_READY = 0x02, ST_PROVISIONING = 0x03, ST_PROVISIONED = 0x04 };
 enum { ERR_NONE = 0x00, ERR_INVALID = 0x01, ERR_UNKNOWN_CMD = 0x02,
        ERR_CONNECT = 0x03, ERR_UNKNOWN = 0xFF };
@@ -266,6 +268,22 @@ static void handle_diag(void)
     free(i);
 }
 
+// Self-test of the recovery layers: makes the bridge fail on purpose. Only over the USB cable, and only with
+// the confirmation word, so it cannot happen by accident. See fault_inject.h.
+static void handle_fault(const uint8_t *a, uint8_t alen)
+{
+    char word[16], kind[16];
+    uint8_t pos = 0;
+    if (!take_str(a, alen, &pos, word, sizeof(word)) || !take_str(a, alen, &pos, kind, sizeof(kind)) ||
+        pos != alen || strcmp(word, "CRASH-TEST") != 0 || !fault_known(kind)) {
+        send_error(ERR_INVALID);
+        return;
+    }
+    const char *s[] = { kind };
+    send_result(CMD_X_FAULT, s, 1);
+    fault_run(kind);
+}
+
 static void handle_rpc(const uint8_t *d, uint8_t len)
 {
     if (len < 2 || d[1] != len - 2) { send_error(ERR_INVALID); return; }
@@ -278,6 +296,7 @@ static void handle_rpc(const uint8_t *d, uint8_t len)
     case CMD_X_BLE:     handle_ble(); break;
     case CMD_X_RESTART: handle_restart(); break;
     case CMD_X_DIAG:    handle_diag(); break;
+    case CMD_X_FAULT:   handle_fault(a, alen); break;
     case CMD_X_AP_PASS: handle_ap_pass(a, alen); break;
     case CMD_X_WIFI_AP: handle_wifi_ap(a, alen); break;
     case CMD_STATE: {

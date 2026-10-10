@@ -38,6 +38,7 @@ idf_component_register(
         "improv_serial.c"
         "supervisor.c"
         "supervisor_logic.c"
+        "fault_inject.c"
         "plan_text.c"
         "plan_templates.c"
         "plan_store.c"

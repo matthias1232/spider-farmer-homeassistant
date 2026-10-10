@@ -16,6 +16,7 @@
 #include "improv_serial.h"
 #include "ggs_ble.h"
 #include "supervisor.h"
+#include "fault_inject.h"
 
 // ---- fake hardware -------------------------------------------------------
 static jmp_buf g_end;          // the task never returns on its own: the fake UART (no more input) or sv_restart() ends it
@@ -37,6 +38,9 @@ void esp_restart(void) { g_restarts++; }
 static int g_sv_why = -1;
 // sv_restart() never returns on the device. The stub ends the run the same way: it jumps out of the task.
 void sv_restart(sv_why_t why) { g_restarts++; g_sv_why = (int)why; longjmp(g_end, 2); }
+static char g_fault[16];
+bool fault_known(const char *k) { return k && (!strcmp(k,"panic") || !strcmp(k,"taskwdt") || !strcmp(k,"intwdt") || !strcmp(k,"deadlock") || !strcmp(k,"leak")); }
+void fault_run(const char *k) { strcpy(g_fault, k); }
 static int g_slots;
 int sv_register(const char *n, uint32_t p) { (void)n; (void)p; return g_slots++; }
 void sv_beat(int s) { (void)s; }
@@ -160,7 +164,7 @@ static int failures;
 static void reset_world(bool connect_ok)
 {
     memset(&g_cfg, 0, sizeof(g_cfg)); strcpy(g_cfg.sta_ssid, "OldNet"); strcpy(g_cfg.ap_ssid, "SpiderBridge"); g_saved = false; g_restarts = 0;
-    g_auto_ble = false; memset(&g_ble, 0, sizeof(g_ble)); g_sv_why = -1; memset(&g_sv, 0, sizeof(g_sv));
+    g_auto_ble = false; memset(&g_ble, 0, sizeof(g_ble)); g_sv_why = -1; memset(&g_sv, 0, sizeof(g_sv)); g_fault[0] = 0;
     g_stored_ap_pass[0] = 0; g_joined_ssid[0] = 0; g_connect_ok = connect_ok; g_task = NULL; g_ticks = 0;
 }
 
@@ -346,6 +350,24 @@ int main(void)
     reset_world(true); g_slots = 0;
     n = put_rpc(pkt, 0x02, NULL, 0); run(pkt, n);
     CHECK(g_slots == 1);
+
+    // 25) fault injection: needs the confirmation word AND a known fault, nothing else triggers it
+    reset_world(true);
+    { const char *v[] = { "CRASH-TEST", "taskwdt" }; size_t l = strs(a, v, 2); n = put_rpc(pkt, 0x46, a, (uint8_t)l); }
+    run(pkt, n);
+    CHECK(result_strings(0x46, r) == 1); CHECK(!strcmp(r[0], "taskwdt")); CHECK(!strcmp(g_fault, "taskwdt"));
+    reset_world(true);
+    { const char *v[] = { "crash-test", "panic" }; size_t l = strs(a, v, 2); n = put_rpc(pkt, 0x46, a, (uint8_t)l); }
+    run(pkt, n); CHECK(last_error() == 1); CHECK(g_fault[0] == 0);          // wrong word
+    reset_world(true);
+    { const char *v[] = { "CRASH-TEST", "format-flash" }; size_t l = strs(a, v, 2); n = put_rpc(pkt, 0x46, a, (uint8_t)l); }
+    run(pkt, n); CHECK(last_error() == 1); CHECK(g_fault[0] == 0);          // unknown fault
+    reset_world(true);
+    { const char *v[] = { "panic" }; size_t l = strs(a, v, 1); n = put_rpc(pkt, 0x46, a, (uint8_t)l); }
+    run(pkt, n); CHECK(last_error() == 1); CHECK(g_fault[0] == 0);          // word missing
+    reset_world(true);
+    { const char *v[] = { "CRASH-TEST", "panic", "x" }; size_t l = strs(a, v, 3); n = put_rpc(pkt, 0x46, a, (uint8_t)l); }
+    run(pkt, n); CHECK(last_error() == 1); CHECK(g_fault[0] == 0);          // trailing junk
     fprintf(fx, "}\n"); fclose(fx);
     if (failures) { printf("%d FAILURE(S)\n", failures); return 1; }
     printf("ALL host tests passed\n");
