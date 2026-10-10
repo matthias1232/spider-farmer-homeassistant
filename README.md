@@ -28,6 +28,11 @@
   <a href="#-deutsche-version">🇩🇪 Deutsche Version ansehen</a>
 </p>
 
+<p align="center">
+  <a href="https://matthias1232.github.io/spider-farmer-homeassistant/demo/"><img src="docs/img/preview-web-gui.png" alt="SpiderBridge web GUI preview — controller dashboard with day/night targets, fans, outlets and sensor readings" width="49%"></a>
+  <a href="https://matthias1232.github.io/spider-farmer-homeassistant/installer/"><img src="docs/img/preview-web-installer.png" alt="Open the SpiderBridge web installer — flash firmware and set up the ESP32 in the browser" width="49%"></a>
+</p>
+
 ---
 
 ## Why SpiderBridge?
@@ -45,6 +50,12 @@ Spider Farmer forces a cloud account, a vendor app, and routes your grow data th
 
 <p align="center">
   <a href="https://matthias1232.github.io/spider-farmer-homeassistant/installer/"><img src="docs/img/web/settings.png" alt="SpiderBridge Web Installer — Wi-Fi, Hotspot, Bluetooth and MQTT in your browser" width="100%"></a>
+</p>
+
+<p align="center">
+  <a href="https://matthias1232.github.io/spider-farmer-homeassistant/installer/"><img src="https://img.shields.io/badge/Open_installer_%26_device_tools-Flash_%C2%B7_Wi--Fi_%C2%B7_Quick_Connect-2ea44f?style=for-the-badge" alt="Open installer and device tools" height="44"></a>
+  &nbsp;
+  <a href="https://matthias1232.github.io/spider-farmer-homeassistant/demo/"><img src="https://img.shields.io/badge-Try_the_web_demo-1f6feb?style=for-the-badge" alt="Try the web demo" height="44"></a>
 </p>
 
 **Four steps. That's it.**
@@ -171,7 +182,7 @@ Tested on a real board with `python scripts/reboot_soak.py COM3 --mode fault` (c
 ## ⭐ If this project helps you
 
 - Give a **star** ⭐ — helps others find the repo.
-- ☕ **[Buy Me a Coffee](https://www.buymeacoffee.com/matthias1232)** — voluntary.
+- ☕ **[Donate via PayPal](https://www.paypal.com/paypalme/matthias1232)** — voluntary, the PayPal-me button in the sidebar points to the same account.
 - 📦 **[Supported ESP32 board (Amazon)](https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl)**
   — affiliate link, no extra cost to you.
 
@@ -639,7 +650,7 @@ Pullen am Stromkabel ist **nie** nötig. Mehrere unabhängige Schichten führen 
 ### ⭐ Wenn dir das Projekt hilft
 
 - Gib einen **Stern** ⭐ — hilft anderen, das Repo zu finden.
-- ☕ **[Buy Me a Coffee](https://www.buymeacoffee.com/matthias1232)** — freiwillig.
+- ☕ **[Donate via PayPal](https://www.paypal.com/paypalme/matthias1232)** — freiwillig, PayPal-me-Button in der Sidebar verlinkt auf dasselbe Konto.
 - 📦 **[Supported ESP32 board (Amazon)](https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl)** — Affiliate-Link, ohne Mehrkosten für dich.
 
 </details>
