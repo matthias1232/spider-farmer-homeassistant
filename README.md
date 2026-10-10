@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="#"><img src="docs/img/ggs-sketch.png" alt="Hand-drawn sketch: Spider Farmer GGS inline duct fan in the center, an ESP32 on the left, Home Assistant and MQTT in the middle, and a smartphone running the Spider Farmer app on the right — the path SpiderBridge bridges" width="100%"></a>
+  <a href="#"><img src="docs/img/ggs-sketch.png" alt="SpiderBridge system overview: Complete grow tent setup with Spider Farmer GGS controller, SF-4000 light, inline fan, 5L humidifier with 2-way splitter and dehumidifier inside a closed local network shield. China cloud connection is optional and switchable in Home Assistant, with dual app options (HA native and Spider Farmer app), ESP32 MITM MQTT proxy, and browser web installer." width="100%"></a>
 </p>
 
 <p align="center">
