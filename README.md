@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="#"><img src="docs/img/logo.png" alt="SpiderBridge" width="460"></a>
+  <a href="#"><img src="docs/img/hero.svg" alt="SpiderBridge — grow tent on the left, Spider Farmer GGS controller in the middle, a small ESP32 SpiderBridge talking BLE to the controller and MQTT to Home Assistant on the right" width="100%"></a>
 </p>
 
 <p align="center">
