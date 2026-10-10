@@ -180,7 +180,7 @@ PAGES = {
     "/status":   (1, "status/index.html",  "status_page.c",  "STATUS_PAGE",  "STATUS_BODY_OPEN",  "STATUS_PAGE_BODY"),
     "/network":  (1, "network/index.html", "network_page.c", "NETWORK_PAGE", "NETWORK_BODY_OPEN", "NETWORK_PAGE_BODY"),
     "/log":      (1, "log/index.html",     "config_portal.c", "LOG_PAGE",    "LOG_BODY_OPEN",     "LOG_PAGE_BODY"),
-    "/about":    (1, "about/index.html",   "about_page.c",    "ABOUT_PAGE",  "ABOUT_BODY_OPEN",   "ABOUT_PAGE_BODY"),
+    "/about":    (1, "about/index.html",   "about_page.c",    "ABOUT_STYLE",  "ABOUT_OPEN",       "ABOUT_BODY"),
 }
 
 
