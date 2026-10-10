@@ -28,6 +28,7 @@ idf_component_register(
         "tz_table.c"
         "ntp_server.c"
         "nav.c"
+        "about_page.c"
         "sf_normalizer.c"
         "sf_command_handler.c"
         "ha_discovery_table.c"

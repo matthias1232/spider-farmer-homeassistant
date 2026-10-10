@@ -22,6 +22,7 @@
 #include "control_page.h"
 #include "status_page.h"
 #include "ota_update.h"
+#include "about_page.h"
 #include "mqtt_send.h"
 #include "sb_system.h"
 #include "network_page.h"
@@ -2162,6 +2163,7 @@ bool config_portal_start(void)
     httpd_uri_t wconn   = { .uri = "/wifi/connect",  .method = HTTP_POST, .handler = wifi_connect_handler };
     httpd_uri_t wstat   = { .uri = "/wifi/status",   .method = HTTP_GET,  .handler = wifi_status_handler };
     httpd_uri_t ctrlver = { .uri = "/control/ver",   .method = HTTP_GET,  .handler = control_ver_handler };
+    httpd_uri_t abpage  = { .uri = "/about",         .method = HTTP_GET,  .handler = about_page_handler };
 
     httpd_register_uri_handler(server, &root);
     httpd_register_uri_handler(server, &save);
@@ -2200,6 +2202,7 @@ bool config_portal_start(void)
     httpd_register_uri_handler(server, &wconn);
     httpd_register_uri_handler(server, &wstat);
     httpd_register_uri_handler(server, &ctrlver);
+    httpd_register_uri_handler(server, &abpage);
 
     web_auth_reload();
 

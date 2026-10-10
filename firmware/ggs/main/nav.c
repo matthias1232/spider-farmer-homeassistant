@@ -26,6 +26,7 @@ static const nav_entry_t ENTRIES[] = {
     { NAV_NETWORK,  "/network", "Network"  },
     { NAV_LOG,      "/log",     "MQTT log" },
     { NAV_FIRMWARE, "/update",  "Firmware" },
+    { NAV_ABOUT,    "/about",   "About"    },
 };
 #define NAV_COUNT (sizeof(ENTRIES) / sizeof(ENTRIES[0]))
 

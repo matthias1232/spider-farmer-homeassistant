@@ -23,6 +23,7 @@ typedef enum {
     NAV_NETWORK,
     NAV_LOG,
     NAV_FIRMWARE,
+    NAV_ABOUT,
 } nav_page_t;
 
 // Sends the nav bar as one or more HTTP chunks. Call right after the

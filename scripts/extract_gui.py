@@ -80,7 +80,7 @@ padding:.45rem .8rem;text-align:center">
   <a href="https://github.com/matthias1232/spider-farmer-homeassistant">SpiderBridge</a>'s
   faker. Built and tested with this
   <a href="https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl">ESP32 board</a>
-  · <a href="https://www.paypal.com/paypalme/matthias1232">Donate</a>
+  · <a href="https://www.buymeacoffee.com/matthias1232">Donate</a>
 </div>"""
 
 
@@ -180,12 +180,14 @@ PAGES = {
     "/status":   (1, "status/index.html",  "status_page.c",  "STATUS_PAGE",  "STATUS_BODY_OPEN",  "STATUS_PAGE_BODY"),
     "/network":  (1, "network/index.html", "network_page.c", "NETWORK_PAGE", "NETWORK_BODY_OPEN", "NETWORK_PAGE_BODY"),
     "/log":      (1, "log/index.html",     "config_portal.c", "LOG_PAGE",    "LOG_BODY_OPEN",     "LOG_PAGE_BODY"),
+    "/about":    (1, "about/index.html",   "about_page.c",    "ABOUT_PAGE",  "ABOUT_BODY_OPEN",   "ABOUT_PAGE_BODY"),
 }
 
 
 def rel_href(target: str, current: str, depth: int) -> str:
     dirs = {"/": "", "/control": "control", "/status": "status",
-            "/network": "network", "/log": "log", "/update": "update"}
+            "/network": "network", "/log": "log", "/update": "update",
+            "/about": "about"}
     prefix = "../" * depth
     target_dir = dirs[target]
     if not target_dir:
@@ -199,6 +201,7 @@ def main() -> int:
     (out / "status").mkdir(parents=True, exist_ok=True)
     (out / "network").mkdir(parents=True, exist_ok=True)
     (out / "log").mkdir(parents=True, exist_ok=True)
+    (out / "about").mkdir(parents=True, exist_ok=True)
     (out / "update").mkdir(parents=True, exist_ok=True)
 
     nav_src = read(MAIN / "nav.c")

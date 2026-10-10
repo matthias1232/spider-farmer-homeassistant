@@ -171,7 +171,7 @@ Tested on a real board with `python scripts/reboot_soak.py COM3 --mode fault` (c
 ## ⭐ If this project helps you
 
 - Give a **star** ⭐ — helps others find the repo.
-- ☕ **[Donate via PayPal](https://www.paypal.com/paypalme/matthias1232)** — voluntary, the PayPal-me button in the sidebar points to the same account.
+- ☕ **[Buy Me a Coffee](https://www.buymeacoffee.com/matthias1232)** — voluntary.
 - 📦 **[Supported ESP32 board (Amazon)](https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl)**
   — affiliate link, no extra cost to you.
 
@@ -639,7 +639,7 @@ Pullen am Stromkabel ist **nie** nötig. Mehrere unabhängige Schichten führen 
 ### ⭐ Wenn dir das Projekt hilft
 
 - Gib einen **Stern** ⭐ — hilft anderen, das Repo zu finden.
-- ☕ **[Donate via PayPal](https://www.paypal.com/paypalme/matthias1232)** — freiwillig, PayPal-me-Button in der Sidebar verlinkt auf dasselbe Konto.
+- ☕ **[Buy Me a Coffee](https://www.buymeacoffee.com/matthias1232)** — freiwillig.
 - 📦 **[Supported ESP32 board (Amazon)](https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl)** — Affiliate-Link, ohne Mehrkosten für dich.
 
 </details>
