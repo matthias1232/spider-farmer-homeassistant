@@ -56,6 +56,17 @@
   .sbq-log{max-height:12rem;overflow:auto;background:#0f1116;border:1px solid #2c303a;padding:.5rem;font-size:.72rem;white-space:pre-wrap}
   progress{height:.7rem;margin:.6rem 0}
   ul.tips li{margin:.25rem 0}
+  .hero{border-color:#3f4a5f;background:linear-gradient(180deg,#1b1f28,#161920)}
+  .hero .sub{color:#9aa0aa;font-size:.92rem;margin:.2rem 0 .9rem}
+  .hero .hint{margin:.4rem 0 1rem}
+  button.act.big{display:block;width:100%;font-size:1.05rem;font-weight:700;padding:.95rem 1.2rem;border-radius:.45rem}
+  .card h3{font-size:.95rem;margin:1.1rem 0 .4rem;color:#c9ced6}
+  ul.feat{margin:.3rem 0;padding-left:1.15rem;font-size:.88rem;color:#aab0ba}
+  ul.feat li{margin:.45rem 0}
+  ul.feat strong{color:#e6e6e6;font-weight:600}
+  details.adv{margin:.9rem 0 .2rem;border:1px solid #2c303a;border-radius:.4rem;padding:.5rem .8rem}
+  details.adv summary{cursor:pointer;font-size:.88rem;color:#9aa0aa}
+  details.adv[open] summary{margin-bottom:.5rem}
 </style>
 <!-- Pinned versions (verified to exist). jsDelivr is the primary CDN, unpkg the fallback;
      see the loader script at the end of the page. -->
@@ -63,6 +74,9 @@
         onerror="window.__cdnFail=(window.__cdnFail||[]).concat('esp')"></script>
 <script src="ggs.js" defer></script>
 <script src="overlay.js" defer></script>
+<!-- Still loaded even though the Quick Connect buttons are gone: quickconnect.js provides
+     window.SBQuickConnect, which the live console uses to decode Improv replies and to send
+     Improv commands. -->
 <script src="quickconnect.js" defer></script>
 <script src="console.js" defer></script>
 <script type="module" src="https://cdn.jsdelivr.net/npm/improv-wifi-serial-sdk@2.8.1/dist/web/serial-launch-button.js"
@@ -74,44 +88,16 @@
 <p class="sub">Spider Farmer GGS controller ⇄ Home Assistant. Everything the app can do,
 1:1 in Home Assistant — no app, no cloud, installation and operation entirely without them.</p>
 
-<div class="card">
-  <h2>1 · Flash the firmware &amp; set up the board</h2>
-  <p>Developed and tested with
-  <a href="https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl" target="_blank" rel="noopener">this ESP32 board</a>.</p>
-
-  <label class="field" for="moduleSel">Module</label>
-  <select id="moduleSel" aria-describedby="moduleHint">
-    <option value="auto" selected>Auto-detect (recommended)</option>
-  </select>
-  <p id="moduleHint" class="hint">Auto-detect reads the chip after you connect and installs the
-  matching build. Pick a module only if you want to force one.</p>
-
-  <p><strong>Quick Connect</strong> does it all in one dialog: joins your home Wi-Fi, creates a new random
-  password for the bridge's hotspot and can connect your GGS controller over Bluetooth.</p>
-  <p class="btnrow">
-    <button type="button" class="act" id="quickBtn">⚡ Quick Connect — new board: install + set up</button>
-    <button type="button" class="act alt" id="quickSetupBtn">⚡ Quick Connect — board already flashed: set up only</button>
-  </p>
-  <p class="hint">Already running SpiderBridge? Use the second button: nothing is flashed, the board is just restarted and
-  configured. This works on every SpiderBridge with current firmware, new or in use: its USB console never switches
-  off, and a board that does not answer is explained (older firmware, other firmware, silent) with a way forward.</p>
-
-  <p><strong>Or step by step / manage a board that is already set up</strong> (IP addresses, single Wi-Fi or password changes, console):</p>
-  <ol>
-    <li>Plug the board into this computer with a <strong>USB data cable</strong>
-        (a charge-only cable shows no port).</li>
-    <li>Click <strong>Open installer &amp; device tools</strong>. Chrome opens a window listing serial ports —
-        pick the board (<em>CP210x</em>, <em>CH340</em> or <em>USB JTAG/serial</em>) and press
-        <strong>Connect</strong>.</li>
-    <li>The window then offers: <em>Install SpiderBridge</em>, <em>IP addresses &amp; status</em>,
-        <em>Send Wi-Fi to GGS Controller</em>, <em>Home Wi-Fi for the bridge</em>, <em>Connect Wi-Fi &amp; randomize SpiderBridge Wi-Fi password</em>,
-        <em>Randomize SpiderBridge Wi-Fi password</em> and <em>Logs &amp; Console</em>.</li>
-  </ol>
-
-  <div id="statusBox" class="status"></div>
+<div class="card hero">
+  <h2>Open the board tool</h2>
+  <p class="sub">Plug the board into your computer with a <strong>USB data cable</strong>
+  (a charge-only cable shows no port), then click the button. The window it opens is your
+  complete board tool: flash the firmware, put the board on your Wi-Fi, read its address and
+  watch its log &mdash; no cloud, no account, nothing to install. Needs
+  <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> on a desktop computer.</p>
 
   <esp-web-install-button id="installBtn">
-    <button slot="activate" type="button" class="act alt" id="flashBtn" title="Install or update the firmware, set up Wi-Fi, read the IP addresses, open the serial console">Open installer &amp; device tools</button>
+    <button slot="activate" type="button" class="act big" id="flashBtn" title="Install or update the firmware, set up Wi-Fi, read the IP addresses, open the serial console">Open installer &amp; device tools</button>
     <span slot="unsupported" class="status warn show">This browser cannot flash over USB.
       Open this page in <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>
       on a desktop computer (Firefox, Safari and mobile browsers have no Web Serial).</span>
@@ -119,16 +105,47 @@
       <code>https://matthias1232.github.io/spider-farmer-homeassistant/installer/</code>.</span>
   </esp-web-install-button>
 
+  <div id="statusBox" class="status"></div>
+
+  <h3>Everything the window does</h3>
+  <ul class="feat">
+    <li><strong>Install SpiderBridge</strong> &mdash; flashes or updates the firmware straight
+        from the browser, picking the build that matches the chip it finds.</li>
+    <li><strong>IP addresses &amp; status</strong> &mdash; shows which address the board
+        received, plus firmware version and uptime.</li>
+    <li><strong>Home Wi-Fi for the bridge</strong> &mdash; joins the board to your network, or
+        changes the network or its password on its own.</li>
+    <li><strong>Connect Wi-Fi &amp; randomize SpiderBridge Wi-Fi password</strong> &mdash; puts
+        the board on your Wi-Fi and replaces the default hotspot password in one go.</li>
+    <li><strong>Randomize SpiderBridge Wi-Fi password</strong> &mdash; swaps only the hotspot
+        password for a fresh random one.</li>
+    <li><strong>Send Wi-Fi to GGS Controller</strong> &mdash; hands the hotspot credentials to
+        the Spider Farmer controller itself, so it reaches the bridge.</li>
+    <li><strong>Logs &amp; Console</strong> &mdash; watch what the board prints while it boots,
+        pairs and publishes to Home Assistant.</li>
+  </ul>
+
+  <details class="adv">
+    <summary>Which build gets flashed</summary>
+    <label class="field" for="moduleSel">Module</label>
+    <select id="moduleSel" aria-describedby="moduleHint">
+      <option value="auto" selected>Auto-detect (recommended)</option>
+    </select>
+    <p id="moduleHint" class="hint">Auto-detect reads the chip after you connect and installs the
+    matching build. Pick a module only if you want to force one.</p>
+  </details>
+
   <ul class="tips">
     <li>No port in the list? Try another USB cable (it must carry data) or another USB port.</li>
-    <li>Install fails with <em>Failed to initialize</em>? Many boards cannot enter download mode on their own:
-        <strong>hold the BOOT button while you press Install</strong> (or Start in Quick Connect) and release it
-        when the progress bar starts.</li>
+    <li>Install fails with <em>Failed to initialize</em>? Many boards cannot enter download mode
+        on their own: <strong>hold the BOOT button while you press Install</strong> and release
+        it when the progress bar starts.</li>
     <li>On Windows the CP210x / CH340 driver may be needed
         (<a href="https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers" target="_blank" rel="noopener">CP210x</a>,
         <a href="https://www.wch-ic.com/downloads/CH341SER_EXE.html" target="_blank" rel="noopener">CH340</a>).</li>
     <li>Close other programs that hold the port (Arduino IDE, serial monitors, other browser tabs).</li>
   </ul>
+
   <p><small>The installer always uses the newest build of this repository
   (<a id="manifestLink" href="../manifest-ggs-esp32.json">manifest</a>).
   Alternatively join the hotspot <code>SpiderBridge</code> (password
@@ -139,7 +156,7 @@
   <h2>2 · Live console</h2>
   <p>Shows what the board prints, and keeps showing it: after a flash, a restart, a crash or when you unplug the
   cable and plug it back in, the console reconnects <strong>by itself</strong>. Click <em>Connect console</em> once and
-  choose the port; Chrome remembers it. While the installer window or Quick Connect uses the port, the console steps
+  choose the port; Chrome remembers it. While the installer window uses the port, the console steps
   aside and comes back afterwards.</p>
   <div id="consoleRoot"></div>
   <p class="hint">Only one program can use the serial port at a time. If the console says <em>busy</em>, close other tabs,
@@ -245,18 +262,7 @@
     new MutationObserver(sync).observe(document.body, { childList: true });
   })();
 
-  // Quick Connect wizard (installer/quickconnect.js). Always uses the auto-detect manifest when
-  // available, so the chip decides which build is flashed, unless a module was picked.
-  function openQuick(mode) {
-    if (!window.isSecureContext || !('serial' in navigator)) {
-      show('warn', 'Quick Connect needs <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> on a desktop computer, on an HTTPS page.');
-      return;
-    }
-    if (!window.SBQuickConnect) { show('err', 'The Quick Connect script has not loaded yet. Reload the page and try again.'); return; }
-    window.SBQuickConnect.open({ manifestUrl: manifest, mode: mode });
-  }
-  document.getElementById('quickBtn').addEventListener('click', function () { openQuick('flash'); });
-  document.getElementById('quickSetupBtn').addEventListener('click', function () { openQuick('setup'); });
+
 
   var box = document.getElementById('statusBox');
   function show(kind, html) { box.className = 'status show ' + kind; box.innerHTML = html; }
