@@ -492,12 +492,22 @@ void improv_serial_start(void)
     if (p) { sb_prov_load(p); configured = p->sta_ssid[0] != '\0'; free(p); }
 
     // RX only through the driver; log output keeps using the console path.
+    // 256-byte RX ring overflowed while wifi_apsta_connect_now() blocked the
+    // improv task for ~20 s; incoming bytes from the host corrupted the packet
+    // stream and prevented the CMD_WIFI response from being parsed. 1024 gives
+    // plenty of headroom for the 1 Hz CMD_STATE keep-alive packets.
     if (!uart_is_driver_installed(UART_PORT) &&
-        uart_driver_install(UART_PORT, 256, 0, 0, NULL, 0) != ESP_OK) {
+        uart_driver_install(UART_PORT, 1024, 0, 0, NULL, 0) != ESP_OK) {
         ESP_LOGW(TAG, "Serial Wi-Fi setup (Improv) not available");
         return;
     }
-    if (xTaskCreate(improv_task, "improv", 3584, NULL, 3, NULL) != pdPASS) {
+    // A command can take a while (joining Wi-Fi: up to ~25 s), and the join
+    // itself (case CMD_WIFI) runs wifi_apsta_connect_now() on this stack:
+    // two wifi_config_t structs plus the ESP-IDF Wi-Fi driver several frames
+    // deep. Measured by the "Timeout" reports from the installer: 3584 bytes
+    // overflowed on that path and no RPC result was ever written, so the
+    // browser gave up after 45 s. 6144 leaves the driver room to work.
+    if (xTaskCreate(improv_task, "improv", 6144, NULL, 3, NULL) != pdPASS) {
         uart_driver_delete(UART_PORT);
         return;
     }
