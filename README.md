@@ -10,6 +10,8 @@
 <p align="center">
   <a href="https://matthias1232.github.io/spider-farmer-homeassistant/installer/"><img src="https://img.shields.io/badge/🚀_Web_Installer-Flash_in_60s-2ea44f?style=for-the-badge" alt="Web Installer"></a>
   &nbsp;
+  <a href="https://github.com/matthias1232/spider-farmer-homeassistant/releases/latest"><img src="https://img.shields.io/badge/⬇️_Download-Firmware_Release-8250df?style=for-the-badge" alt="Firmware release download"></a>
+  &nbsp;
   <a href="https://matthias1232.github.io/spider-farmer-homeassistant/demo/"><img src="https://img.shields.io/badge/👁️_Live_Demo-Try_it-1f6feb?style=for-the-badge" alt="Live Demo"></a>
   &nbsp;
   <a href="https://github.com/matthias1232/spider-farmer-homeassistant/stargazers"><img src="https://img.shields.io/github/stars/matthias1232/spider-farmer-homeassistant?style=for-the-badge" alt="Stars"></a>
@@ -353,7 +355,9 @@ covered by a host test (`python firmware/ggs/host_test/run.py`) and the installe
 `node tests/installer_quickconnect.test.mjs` and `node tests/installer_console.test.mjs`; both run
 in CI before the firmware is built.
 
-The build the installer uses is always the latest successful build from this repository — you
+The build the installer uses is always the latest successful build from this repository. Released
+versions are downloadable too — factory image, app image and manifest — from the
+[Releases page](https://github.com/matthias1232/spider-farmer-homeassistant/releases), and you
 can also build and flash any commit yourself (see *Build from source*).
 
 *Auto-detect* reads the chip family from the connected board and installs the matching build.
@@ -632,7 +636,7 @@ immediately:
 
 - push to `main` → build + publish (installer and demo pages always serve the newest build)
 - Actions tab → **Run workflow** (`workflow_dispatch`) → build on demand, no push needed
-- tag `v*` → build + the merged images are attached to the release
+- tag `v*` → build + a downloadable [GitHub Release](https://github.com/matthias1232/spider-farmer-homeassistant/releases) with the factory image, the app image and the matching manifest
 
 Merge binaries and per-target manifests are uploaded as workflow artifacts, so you can always
 flash the current state without a local toolchain.
@@ -688,6 +692,8 @@ this ESP32 port is based on, and it is publicly available there:
 
 <p align="center">
   <a href="https://matthias1232.github.io/spider-farmer-homeassistant/installer/"><img src="https://img.shields.io/badge/🚀_Web_Installer-Jetzt_flashen-2ea44f?style=for-the-badge" alt="Web Installer"></a>
+  &nbsp;
+  <a href="https://github.com/matthias1232/spider-farmer-homeassistant/releases/latest"><img src="https://img.shields.io/badge/⬇️_Download-Firmware_Release-8250df?style=for-the-badge" alt="Firmware-Download"></a>
   &nbsp;
   <a href="https://matthias1232.github.io/spider-farmer-homeassistant/demo/"><img src="https://img.shields.io/badge/👁️_Live_Demo-Ansehen-1f6feb?style=for-the-badge" alt="Live Demo"></a>
 </p>
