@@ -127,6 +127,7 @@ SETTINGS_LINKS = [
     ('href="/network"', 'href="network/"'),
     ('href="/log"', 'href="log/"'),
     ('href="/update"', 'href="update/"'),
+    ('href="/about"', 'href="about/"'),
 ]
 
 
