@@ -1,8 +1,9 @@
 name: Build firmware
 
 # Builds every firmware listed in firmware.json for every listed target,
-# produces flashable factory images, uploads them as workflow artifacts
-# and publishes the installer + demo pages to GitHub Pages.
+# produces flashable factory images, uploads them as workflow artifacts,
+# publishes the installer + demo pages to GitHub Pages and — for version
+# tags — attaches the same images to a downloadable GitHub Release.
 #
 # A new build is available:
 #   - automatically on every push to main (and on every tag v*)
@@ -202,3 +203,61 @@ jobs:
           path: site
       - id: deploy
         uses: actions/deploy-pages@v4
+
+  # A downloadable GitHub Release next to the web installer: the same flashable
+  # factory image (it carries the partition table, so it is complete on its own)
+  # and the bare application image (what http://<bridge>/update takes over WLAN),
+  # attached to the version tag so they can be fetched with a browser, curl or
+  # wget, flashed from a local copy of the installer, or archived by hand.
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Sort the images for download
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF#refs/tags/v}"
+          mkdir -p release
+          # One artifact per build: artifacts/firmware-<id>-<target>/
+          for d in artifacts/*/; do
+            [ -d "$d" ] || continue
+            prefix=""
+            # Factory image for the installer (0x0, with the partition table).
+            for f in "$d"*-factory.bin; do
+              [ -e "$f" ] || continue
+              base="$(basename "$f" .bin)"
+              prefix="${base%-factory}"
+              cp "$f" "release/${base}-v${ver}.bin"
+            done
+            [ -n "$prefix" ] || prefix="$(basename "$d")"
+            # Bare application image, for /update over WLAN.
+            for f in "$d"*.bin; do
+              [ -e "$f" ] || continue
+              case "$f" in *-factory.bin) continue ;; esac
+              cp "$f" "release/${prefix}-app-v${ver}.bin"
+            done
+            # ESP Web Tools manifest, so the same build can also be flashed
+            # from a checkout or a downloaded copy of the installer page.
+            for f in "$d"manifest-*.json; do
+              [ -e "$f" ] || continue
+              # The manifest points at the factory image; keep that reference
+              # valid although the released file carries the version in its name.
+              sed "s/\.bin\"/-v${ver}.bin\"/g" "$f" \
+                > "release/$(basename "$f" .json)-v${ver}.json"
+            done
+          done
+          ls -lh release
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
