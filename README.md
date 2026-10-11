@@ -37,82 +37,161 @@
 
 ## How it works
 
-![Architecture — controller talks to the ESP32 over Bluetooth, the bridge talks to Home Assistant over MQTT](docs/img/architecture.png)
+![Architecture — the controller joins the bridge's own Wi-Fi hotspot, the bridge talks to Home Assistant over MQTT](docs/img/architecture.png)
 
-SpiderBridge uses **three independent communication paths**. Each has a single, clearly defined role:
+SpiderBridge is one ESP32 that sits between your Spider Farmer GGS controller and your Home
+Assistant. Four links are involved and they do completely different jobs — and the order matters,
+because each one sets up the next.
 
-### Path 1 — Browser → ESP32 (Bluetooth LE / Improv Serial): setup only
+### 1. USB — your browser → the ESP32 (setup)
 
-Your browser talks to the ESP32 over Bluetooth LE using the [Improv Wi-Fi Serial](https://www.improv-wifi.com/serial/) protocol. This path is used **exclusively during installation** to:
+Everything starts with a **USB data cable** and Google Chrome or Microsoft Edge. The installer in
+your browser talks to the board over the **Web Serial API** (`navigator.serial`) — the same cable you
+plugged in. Nothing else is used to reach the board. Over that one cable the installer:
 
-- Flash the firmware onto the ESP32
-- Send your home Wi-Fi credentials to the ESP32
+- **flashes the firmware** with [esptool-js](https://github.com/espressif/esptool-js), the library
+  ESP Web Tools is built on,
+- **sends your home Wi-Fi name and password** using the
+  [Improv Wi-Fi Serial](https://www.improv-wifi.com/serial/) protocol, which the bridge answers on
+  UART0 — its USB port — next to the normal log output,
+- **gives the bridge's own hotspot a new random password**, and
+- can **ask the bridge to go and find your GGS controller**.
 
-No sensor data, no controller values, no grow information ever flows over this connection. Once setup is complete, this path is closed.
+**Bluetooth is not involved on this path at all.** Your browser never opens a Bluetooth connection
+(`navigator.bluetooth` is never used, not by the installer, not by any page in this repository), and
+your computer's Bluetooth is never paired with anything. The board is reached by cable, full stop.
+That is deliberate: flashing, Wi-Fi setup and the console log all work on machines with no Bluetooth
+at all.
 
-### Path 2 — Controller ↔ ESP32 (Bluetooth LE): pairing only
+Once setup is done this path is quiet — the bridge still answers on USB for logs, diagnostics and
+firmware updates, but nothing about your grow flows through it.
 
-The ESP32 acts as a BLE client for the GGS controller's GATT service (UUID `0x00FF`), speaking the encrypted GGS protocol with product-specific AES keys. Bluetooth is used **only for pairing**:
+### 2. Bluetooth — the ESP32's own radio → the controller (once)
 
-- The bridge scans for nearby controllers
-- You select your controller
-- The bridge sends the controller the credentials for its own Wi-Fi hotspot
-- The controller is activated on the Bluetooth link
+The Bluetooth that matters here is the **ESP32's own Bluetooth adapter**, not your computer's. The
+bridge is the BLE *central*: when you ask it to, it restarts into a short Bluetooth-only boot,
+scans for controllers nearby, and connects to the one you pick.
 
-After this one-time handshake, Bluetooth is no longer needed for data transfer. The controller stays visible over Bluetooth so you can still pair your phone with the Spider Farmer app afterwards.
+Over that link it does exactly one job: **it hands the controller its new Wi-Fi.** The GGS exposes
+a setup service (`0x00FF`) with a write characteristic (`0xFF02`) and a notify characteristic
+(`0xFF01`). The bridge writes one AES-128-CBC encrypted JSON frame to it:
 
-**Bluetooth is NOT the data channel.** It is a one-time setup transport for credentials and pairing.
+```json
+{"method":"setWifi","params":{"ssid":"SpiderBridge-xxxx","pass":"<hotspot password>"},"msgId":"…","pid":"…","uid":"…"}
+```
 
-### Path 3 — ESP32 ↔ Home Assistant (MQTT over Wi-Fi): all data
+SSID in, password in — that is the entire Bluetooth story. **Bluetooth is not the data channel and
+never carries a single grow value.** After that one-time handshake the bridge is done with
+Bluetooth and the controller switches to Wi-Fi.
 
-This is the **primary data path** and the only one that carries live values and commands:
+Two details worth knowing:
 
-- The ESP32 connects to your home Wi-Fi network as a station (STA)
-- It publishes all controller data as MQTT Discovery payloads — **183 native HA entities** with zero YAML configuration
-- Home Assistant sends control commands back over the same MQTT connection
-- Every light, fan, outlet, alarm, grow plan, sensor reading, and calibration value flows over this path
+- **The controller keeps working with the Spider Farmer app.** Right after `setWifi` the controller
+  stops advertising, so the bridge can send `setDevDeactive` and make it advertise again — your
+  phone can then pair with it exactly as before.
+- **Why the bridge reboots for this.** Bluetooth and the controller's TLS session compete for the
+  same internal RAM on an ESP32. So Bluetooth is only switched on for the seconds it is needed, the
+  result is kept, and the bridge boots back into normal mode where it hands all of that memory to
+  the TLS session. In the installer you will see the board go quiet on USB while that happens.
 
-MQTT is always active. It does not depend on Bluetooth, the hotspot, or the MITM proxy.
+### 3. Wi-Fi — controller → ESP32 hotspot → Home Assistant (all the data)
 
-### Path 4 (optional) — Controller → ESP32 hotspot → MITM proxy → Spider Farmer cloud
+This is the real data path, and it has nothing to do with Bluetooth. The bridge runs **AP + STA at
+the same time**: it is its own Wi-Fi access point (`SpiderBridge-…`) *and* a normal client on your
+home network.
 
-If you choose to let the controller connect to the ESP32's Wi-Fi hotspot, the bridge can optionally relay the controller's TLS traffic to the real Spider Farmer cloud via a MITM proxy (`mitm_proxy.c` + `wan_gate.c`). This path is:
+```text
+   GGS controller ──Wi-Fi──▶ ESP32 hotspot ──DNS hijack──▶ TLS terminated locally
+                                                            │
+                                                     MQTT packets parsed
+                                                            │
+                                                    normalised + published
+                                                            │
+                                              your MQTT broker ──▶ Home Assistant
+                                                            ▲
+                                     commands go back down the same path
+```
 
-- **Optional** — the controller works perfectly without it
-- **Switchable** — can be turned off entirely from three places:
-  - The web UI (`http://spiderbridge.local`)
-  - Home Assistant (`switch.internet_for_controllers`)
-  - MQTT command (`spiderfarmer/<device_id>/command/wan/set` → `OFF`)
-- **When off**: NAPT is disabled so the controller cannot route to the internet, and the proxy answers the controller's MQTT packets locally (CONNACK, SUBACK, PUBACK, PINGRESP) so it stays connected and keeps publishing status — but nothing leaves your network
+The controller was built to talk to `sf.mqtt.spider-farmer.com:8883`. The bridge's DNS proxy
+answers that one name with its own address, so the controller opens its MQTT connection **to the
+bridge**. From there:
 
-This path exists so the Spider Farmer app can still reach the controller if you want it to. It is not required for Home Assistant.
+1. The bridge **terminates the controller's TLS session locally**, using the Spider Farmer
+   certificate material (`firmware/ggs/certs/`), so the controller believes it is talking to the
+   vendor's broker.
+2. Its **MQTT 3.1.1 packets are parsed** on the wire — `CONNECT`, `PUBLISH`, `SUBSCRIBE`,
+   `PINGREQ` and the rest.
+3. The JSON inside the publishes (`getDevSta`, `getConfigField`, …) is **normalised** into plain
+   state values and published to *your* broker as retained topics:
+   `spiderfarmer/<id>/state/temperature`, `spiderfarmer/<id>/state/fan`, `spiderfarmer/<id>/state/plan`, …
+   Every one of them is announced through **MQTT Discovery**, so Home Assistant shows a native
+   device with no YAML at all.
+4. **Commands travel the same road in reverse.** Flip a switch in Home Assistant and the bridge
+   receives `spiderfarmer/<id>/command/<field>/set`, rebuilds the **complete** module block the
+   controller expects — it silently discards partial blocks — and injects the matching
+   `setConfigField` frame into the very same session. The controller's next status frame confirms
+   the change, and the entities update.
+
+This path works even with **no MQTT broker configured**: the bridge then simply sends the commands
+through the intercepted session instead, and the web interface keeps working.
+
+One controller per bridge at a time: the firmware supports a single active controller session.
+
+### 4. Cloud mirroring — optional, and switchable
+
+If you want the Spider Farmer app or cloud to keep reaching the controller, the bridge can mirror
+the session onward to the real broker. This is two independent switches, because they stop
+different things:
+
+| Switch | What it controls | Where you find it |
+|---|---|---|
+| **WAN gate** | NAT routing for hotspot clients. Off = the controller cannot reach anything past the bridge. | web UI, `switch.internet_for_controllers`, `spiderfarmer/<id>/command/wan/set` |
+| **Cloud forward** | Whether the bridge relays the session to the real Spider Farmer cloud. Off = the bridge answers the controller itself. | web UI, Home Assistant |
+
+Turning NAT off alone does **not** make the setup local-only — the bridge's own connection to the
+cloud runs over your home network and bypasses NAT entirely. Both switches have to be off for a
+genuinely offline setup. With cloud forwarding off the bridge answers the controller itself
+(`CONNACK`, `SUBACK`, `PUBACK`, `PINGRESP`), so it stays connected, keeps publishing its status and
+never settles into a reconnect loop. Home Assistant control keeps working either way — it never
+used the cloud path.
 
 ### Summary
 
-| Path | Transport | Role | Always on? |
-|------|-----------|------|------------|
-| Browser → ESP32 | BLE (Improv Serial) | Flash firmware, send Wi-Fi credentials | Setup only |
-| Controller ↔ ESP32 | BLE (GGS protocol) | Pair controller, send hotspot credentials | Setup only |
-| ESP32 ↔ HA | MQTT over Wi-Fi | All sensor data, commands, discovery | Always |
-| Controller → Cloud | Wi-Fi hotspot + MITM proxy | Optional relay to Spider Farmer cloud | Switchable |
+| # | Link | Transport | What it carries | Always on? |
+|---|---|---|---|---|
+| 1 | Browser → ESP32 | **USB** cable (Web Serial, esptool-js + Improv Serial) | Flash firmware, home Wi-Fi, hotspot password, logs | Setup and maintenance |
+| 2 | ESP32 → controller | **Bluetooth LE** (the ESP32's own radio) | Hotspot SSID + password, once | One-time only |
+| 3 | Controller → ESP32 → HA | **Wi-Fi**: hotspot + DNS hijack + local TLS + MQTT | Every value and every command | Always |
+| 4 | ESP32 → Spider Farmer cloud | Wi-Fi uplink, mTLS relay | Optional mirroring | Switchable, off = fully local |
 
 ### Firmware modules
 
-- **`ggs_ble.c`** — BLE client for the controller's GATT service (UUID `0x00FF`), encrypted GGS protocol, product-specific AES keys.
-- **`sf_normalizer.c` / `sf_command_handler.c`** — translates controller frames into HA-friendly values and commands.
-- **`ha_mqtt.c` + `ha_discovery_table.c`** — publishes state topics and discovery payloads so HA recognises the controller natively.
-- **`mitm_proxy.c` + `wan_gate.c`** — optional path for controllers that connect to the bridge's Wi-Fi hotspot: the bridge terminates their TLS session locally and relays to the real Spider Farmer cloud. *Can be switched off entirely.*
+- **`improv_serial.c`** — Improv Wi-Fi Serial on the USB port, plus SpiderBridge's own extensions
+  (commands `0x40`–`0x49`): addresses, hotspot password, Bluetooth jobs, restart, diagnostics.
+- **`ggs_ble.c`** — BLE central for the GGS setup service (`0x00FF` / `0xFF02` / `0xFF01`), AES-128-CBC
+  framing, `setWifi` / `setDevActive` / `setDevDeactive`.
+- **`wifi_apsta.c`** — AP + STA at once: the controller's hotspot and your home network.
+- **`dns_hijack.c` + `mitm_proxy.c`** — the answer that sends the controller's broker lookups to the
+  bridge, the locally terminated TLS session, and the MQTT wire parser.
+- **`mqtt_send.c` + `sf_command_handler.c`** — the way back: Home Assistant command → complete
+  controller module block → injected frame.
+- **`sf_normalizer.c`** — the controller's JSON → Home Assistant state topics, byte-compatible with
+  the original Python bridge.
+- **`ha_mqtt.c` + `ha_discovery_table.c`** — the connection to your broker and the MQTT Discovery
+  payloads that make the entities native.
+- **`mitm_proxy.c` + `wan_gate.c`** — the optional relay to the real Spider Farmer cloud, and the two
+  switches that turn it off.
 
 ---
 
 ## Why SpiderBridge?
 
-Spider Farmer forces a cloud account, a vendor app, and routes your grow data through their servers. **SpiderBridge turns that around**: your controller talks only over Bluetooth to a ~€10 ESP32, and Home Assistant sees everything as if the controller were a native HA device.
+Spider Farmer forces a cloud account, a vendor app, and routes your grow data through their servers. **SpiderBridge turns that around**: your controller never speaks to a Spider Farmer server again — it talks to a ~€10 ESP32 on your own Wi-Fi, and Home Assistant sees everything as if the controller were a native HA device.
 
 | 🔒 **100% local** | 💸 **Under €15 setup** | 🧠 **1:1 with the app** |
 |---|---|---|
-| No Spider Farmer cloud, no app, no account. The controller's own internet can be switched off entirely. | One ESP32 (WROOM-32, 4 MB flash) is all you need. No Raspberry Pi, no Docker, no cable mess. | **183 HA entities** (153 per controller + 30 bridge diagnostics) — every light, fan, outlet, alarm and grow-plan setting is covered. |
-| Controller ↔ Bridge: encrypted Bluetooth LE. Home Assistant ↔ Bridge: MQTT on your LAN. | Flash via a USB data cable, plug it in, done. No soldering, no terminal, no toolchain. | Day/night targets, 13 alarm types, grow plans with templates, sensor calibration, Bluetooth pairing — complete. |
+| No Spider Farmer cloud, no app, no account. The controller's own internet can be switched off entirely — two switches, both off, and nothing leaves your network. | One ESP32 (WROOM-32, 4 MB flash) is all you need. No Raspberry Pi, no Docker, no cable mess. | **183 HA entities** (153 per controller + 30 bridge diagnostics) — every light, fan, outlet, alarm and grow-plan setting is covered. |
+| Set up over the **USB cable** with Chrome or Edge; Bluetooth is used exactly once, to give the controller its Wi-Fi. Home Assistant ↔ Bridge: MQTT on your LAN. | Flash via a USB data cable, plug it in, done. No soldering, no terminal, no toolchain. | Day/night targets, 13 alarm types, grow plans with templates, sensor calibration, one-time Bluetooth provisioning — complete. |
 
 ---
 
@@ -132,10 +211,10 @@ Spider Farmer forces a cloud account, a vendor app, and routes your grow data th
 
 1. 🌐 **Open the installer** → [matthias1232.github.io/spider-farmer-homeassistant/installer/](https://matthias1232.github.io/spider-farmer-homeassistant/installer/) (Chrome or Edge, desktop)
 2. 🔌 **Plug in the board** → with a USB data cable, then click *Select board & start*
-3. 📶 **Enter your Wi-Fi** → Improv Serial sends your home network credentials straight to the ESP32
-4. 🔗 **(Optional) Quick Connect** → pairs your GGS controller over Bluetooth with the bridge hotspot
+3. 📶 **Enter your Wi-Fi** → esptool-js flashes the firmware over USB, and Improv Wi-Fi Serial sends your home network credentials over the same cable
+4. 🔗 **(Optional) Quick Connect** → the bridge then does the Bluetooth work itself: it finds your GGS controller and hands it the hotspot's SSID and password
 
-That's it. No command line, no `idf.py`, no YAML files. The ESP32 fetches the firmware straight from your browser, joins your Wi-Fi, and is reachable from then on at `http://spiderbridge.local`.
+That's it. No command line, no `idf.py`, no YAML files. The ESP32 fetches the firmware straight from your browser over the USB cable, joins your Wi-Fi, and is reachable from then on at **`http://192.168.10.1`** on its own `SpiderBridge` hotspot, or at the address it received on your home network — the installer's *IP addresses & status* tool shows you both.
 
 > 💡 **Tip:** If the flash fails with *Failed to initialize*, hold the **BOOT** button on the board while clicking *Install*, and release it as soon as the progress bar starts.
 
@@ -184,7 +263,7 @@ The full step-by-step guide with troubleshooting lives below in the
 
 ## 🏠 Home Assistant — fully integrated
 
-Each GGS controller shows up as its **own device with 153 entities** in Home Assistant, and the bridge adds **30 more diagnostic entities** (clock, timezone, network switches, uplink/hotspot diagnostics, restart, factory reset). All entities are native — use them in dashboards, automations, voice assistants, the energy dashboard and scenes without any YAML.
+One bridge drives **one controller at a time**, and that controller shows up as its **own device with 153 entities** in Home Assistant, while the bridge adds **30 more diagnostic entities** (clock, timezone, network switches, uplink/hotspot diagnostics, restart, factory reset). All entities are native — use them in dashboards, automations, voice assistants, the energy dashboard and scenes without any YAML.
 
 **GGS Controller — [controller-page.png](docs/img/ha/controller-page.png)** (all 153 entities in one capture):
 
@@ -217,7 +296,7 @@ Tested on a real board with `python scripts/reboot_soak.py COM3 --mode fault` (c
 ## ⭐ If this project helps you
 
 - Give a **star** ⭐ — helps others find the repo.
-- ☕ **[Donate via PayPal](https://www.paypal.com/paypalme/matthias1232)** — voluntary, the PayPal-me button in the sidebar points to the same account.
+- ☕ **[Buy me a coffee](https://www.buymeacoffee.com/matthias1232)** — voluntary, and the same link the firmware's *About* page shows.
 - 📦 **[Supported ESP32 board (Amazon)](https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl)**
   — affiliate link, no extra cost to you.
 
@@ -267,8 +346,9 @@ Tested on a real board with `python scripts/reboot_soak.py COM3 --mode fault` (c
 > release it when the progress bar starts.
 
 The wizard's extra commands (IP addresses, hotspot password, quick connect) are SpiderBridge
-extensions of [Improv Wi-Fi Serial](https://www.improv-wifi.com/serial/) (commands `0x40`–`0x46`,
-see `firmware/ggs/main/improv_serial.c`); other Improv clients ignore them. The firmware side is
+extensions of [Improv Wi-Fi Serial](https://www.improv-wifi.com/serial/) (commands `0x40`–`0x49`,
+see `firmware/ggs/main/improv_serial.c`); other Improv clients ignore them. All of them travel over
+the same USB serial link as the flashing and the Wi-Fi credentials. The firmware side is
 covered by a host test (`python firmware/ggs/host_test/run.py`) and the installer by
 `node tests/installer_quickconnect.test.mjs` and `node tests/installer_console.test.mjs`; both run
 in CI before the firmware is built.
@@ -285,21 +365,27 @@ are not supported yet, so the installer says so instead of flashing a wrong imag
 
 1. In Home Assistant: **Settings → Devices & services → MQTT** (install the Mosquitto add-on or
    point HA at your broker).
-2. Enter your broker in the bridge's Web UI (Settings → MQTT) — or let the bridge run its own
-   broker on the hotspot.
+2. Enter your broker in the bridge's Web UI (Settings → MQTT). A broker is what gives you the 183
+   entities, history and automations; the bridge connects to it as a normal client, over `mqtt://`
+   or `mqtts://` with a pinned CA if you want TLS. **The bridge does not run a broker itself.**
 3. The bridge announces itself over MQTT Discovery; the diagnostics entities
    (bridge memory/firmware) appear immediately.
+4. No broker at all? That works too: control then goes straight through the intercepted controller
+   session, and the bridge's own web UI is the interface.
 
-### 3. Pair the GGS controller (Bluetooth)
+### 3. Give the GGS controller its Wi-Fi (Bluetooth, once)
 
 1. In the bridge's Web UI open **Control → Bluetooth: scan** (or press the *Pair Bluetooth* button
-   in Home Assistant).
+   in Home Assistant). You can also do it from the installer with *Send Wi-Fi to GGS Controller* —
+   the bridge does the Bluetooth work in both cases, over the same USB cable.
 2. The bridge briefly restarts into Bluetooth-only mode, scans, and lists the controllers it found
-   — with signal strength, product code and whether they are already known.
-3. Select your controller. The bridge hands over the hotspot credentials, activates the device on
-   the Bluetooth link and reboots straight back into normal operation.
-4. A few seconds later the controller shows up in Home Assistant as its own device with the full
-   set of entities.
+   — with signal strength, product code and whether they are already known. It is silent on USB
+   while that boot runs, which can take 10 to 120 seconds.
+3. Select your controller. The bridge writes it the hotspot's SSID and password over the
+   controller's setup characteristic, watches until the controller reports its Wi-Fi link is up,
+   and reboots straight back into normal operation.
+4. From that moment the controller is on the bridge's hotspot, its MQTT session goes to the bridge,
+   and it appears in Home Assistant as its own device with the full set of entities.
 
 **Done** — the Spider Farmer app was never opened.
 
@@ -436,7 +522,6 @@ Grouped by function. *Kind*: Control = writable entity, Sensor = read-only.
 | Alarm Light Over-Temperature | switch | Control (config) | — |
 | Alarm PPFD | switch | Control (config) | — |
 | Alarm PPFD Maximum | number | Control (config) | µmol/m²/s |
-| Alarm PPFD Minimum | number | Control (config) | µmol/m²/s |
 | Alarm Sensor Offline | switch | Control (config) | — |
 | Alarm Substrate EC | switch | Control (config) | — |
 | Alarm Substrate EC Maximum | number | Control (config) | mS/cm |
@@ -524,7 +609,7 @@ Grouped by function. *Kind*: Control = writable entity, Sensor = read-only.
 | Factory reset (type RESET) | text | Control (config) | — |
 | Restart bridge | button | Control (config) | — |
 
-**183 entities in total** — 153 per controller + 30 on the bridge (binary_sensor × 3, button × 5, fan × 3, light × 2, number × 36, select × 21, sensor × 46, switch × 42, text × 5, time × 20). Generated from the firmware (`ha_discovery_table.c` and `ha_mqtt.c`) by `scripts/gen_entity_docs.py`; do not edit by hand.
+**183 entities in total** — 153 per controller + 30 on the bridge itself (binary\_sensor × 3, button × 5, fan × 3, light × 2, number × 36, select × 21, sensor × 46, switch × 42, text × 5, time × 20). Generated from the firmware (`ha_discovery_table.c` and `ha_mqtt.c`) by `scripts/gen_entity_docs.py`; do not edit by hand.
 <!-- ENTITY-LIST:END -->
 </details>
 
@@ -609,62 +694,132 @@ this ESP32 port is based on, and it is publicly available there:
 
 ### Wie es funktioniert
 
-SpiderBridge nutzt **drei unabhängige Kommunikationspfade**. Jeder hat eine klar definierte Rolle:
+SpiderBridge ist ein einziger ESP32, der zwischen deinem Spider-Farmer-GGS-Controller und deinem
+Home Assistant sitzt. Drei Verbindungen sind im Spiel, und sie machen komplett unterschiedliche
+Dinge — die Reihenfolge ist wichtig, denn jede richtet die nächste ein.
 
-**Pfad 1 — Browser → ESP32 (Bluetooth LE / Improv Serial): nur Einrichtung**
+**1. USB — dein Browser → der ESP32 (Einrichtung)**
 
-Dein Browser spricht per Bluetooth LE mit dem ESP32 über das [Improv Wi-Fi Serial](https://www.improv-wifi.com/serial/)-Protokoll. Dieser Pfad wird **ausschließlich während der Installation** verwendet:
+Alles beginnt mit einem **USB-Datenkabel** und Google Chrome oder Microsoft Edge. Der Installer in
+deinem Browser spricht über die **Web-Serial-API** (`navigator.serial`) mit dem Board — also über
+genau das Kabel, das du eingesteckt hast. Nichts anderes wird benutzt, um das Board zu erreichen.
+Über dieses eine Kabel
 
-- Firmware auf den ESP32 zu flashen
-- Deine Heimnetz-WLAN-Credentials an den ESP32 zu senden
+- **flasht der Installer die Firmware** mit
+  [esptool-js](https://github.com/espressif/esptool-js), der Bibliothek, auf der ESP Web Tools
+  aufbaut,
+- **sendet er Name und Passwort deines Heim-WLANs** mit dem
+  [Improv-Wi-Fi-Serial](https://www.improv-wifi.com/serial/)-Protokoll, das die Bridge auf UART0 —
+  also ihrem USB-Port — neben der normalen Log-Ausgabe beantwortet,
+- **vergibt er ein neues Zufallspasswort für den Hotspot der Bridge** und
+- kann **die Bridge bitten, deinen GGS-Controller zu suchen**.
 
-Keine Sensordaten, keine Controller-Werte, keine Grow-Informationen fließen über diese Verbindung. Nach der Einrichtung ist dieser Pfad geschlossen.
+**An diesem Pfad ist überhaupt kein Bluetooth beteiligt.** Dein Browser öffnet nie eine
+Bluetooth-Verbindung (`navigator.bluetooth` wird weder vom Installer noch von irgendeiner Seite in
+diesem Repository benutzt), und das Bluetooth deines Computers wird mit nichts gepaart. Das Board
+wird per Kabel erreicht, Punkt. Das ist Absicht: Flashen, WLAN-Einrichtung und die Konsole
+funktionieren auch auf Rechnern ganz ohne Bluetooth.
 
-**Pfad 2 — Controller ↔ ESP32 (Bluetooth LE): nur Pairen**
+**2. Bluetooth — der eigene Funk des ESP32 → der Controller (einmalig)**
 
-Der ESP32 agiert als BLE-Client für den GATT-Service des GGS-Controllers (UUID `0x00FF`) und spricht das verschlüsselte GGS-Protokoll mit produktspezifischen AES-Schlüsseln. Bluetooth wird **nur zum Paaren** verwendet:
+Das Bluetooth, das hier zählt, ist der **eigene Bluetooth-Adapter des ESP32**, nicht der deines
+Computers. Die Bridge ist der BLE-*Central*: Wenn du sie bittest, startet sie in einen kurzen
+Nur-Bluetooth-Boot, scannt die Umgebung nach Controllern und verbindet sich mit dem, den du
+auswählst.
 
-- Die Bridge scannt nach Controllern in der Nähe
-- Du wählst deinen Controller aus
-- Die Bridge sendet dem Controller die Credentials für eigenen Wi-Fi-Hotspot
-- Der Controller wird auf dem Bluetooth-Link aktiviert
+Über diese Verbindung macht sie genau eine Sache: **Sie gibt dem Controller sein neues WLAN.** Der
+GGS stellt einen Setup-Service bereit (`0x00FF`) mit einer Write-Characteristic (`0xFF02`) und einer
+Notify-Characteristic (`0xFF01`). Die Bridge schreibt einen einzigen AES-128-CBC-verschlüsselten
+JSON-Frame hinein:
 
-Nach diesem einmaligen Handshake wird Bluetooth nicht mehr für die Datenübertragung benötigt. Der Controller bleibt über Bluetooth sichtbar, sodass du weiterhin dein Handy mit der Spider Farmer App paaren kannst.
+```json
+{"method":"setWifi","params":{"ssid":"SpiderBridge-xxxx","pass":"<Hotspot-Passwort>"},"msgId":"…","pid":"…","uid":"…"}
+```
 
-**Bluetooth ist NICHT der Datenkanal.** Er ist ein einmaliges Setup-Transportmedium für Credentials und Pairen.
+SSID rein, Passwort rein — das ist die ganze Bluetooth-Geschichte. **Bluetooth ist nicht der
+Datenkanal und überträgt keinen einzigen Grow-Wert.** Nach diesem einmaligen Handshake ist die
+Bridge mit Bluetooth fertig und der Controller wechselt auf WLAN.
 
-**Pfad 3 — ESP32 ↔ Home Assistant (MQTT über WLAN): alle Daten**
+Zwei Details, die du kennen solltest:
 
-Dies ist der **primäre Datenpfad** und der einzige, der Live-Werte und Befehle trägt:
+- **Der Controller läuft mit der Spider-Farmer-App weiter.** Direkt nach `setWifi` hört der
+  Controller auf zu advertisen, deshalb kann die Bridge `setDevDeactive` senden und ihn wieder
+  sichtbar machen — dein Handy kann ihn dann pairen wie bisher.
+- **Warum die Bridge dafür neu startet.** Bluetooth und die TLS-Sitzung des Controllers brauchen auf
+  einem ESP32 denselben internen RAM. Bluetooth wird daher nur für die wenigen Sekunden
+  eingeschaltet, die es braucht; das Ergebnis wird gespeichert, und die Bridge bootet zurück in den
+  Normalbetrieb, wo sie diesen Speicher komplett der TLS-Sitzung gibt. Im Installer siehst du, wie
+  das Board dabei auf USB schweigt.
 
-- Der ESP32 verbindet sich mit deinem Heim-WLAN als Station (STA)
-- Er veröffentlicht alle Controller-Daten als MQTT-Discovery-Payloads — **183 native HA-Entities** ohne YAML-Konfiguration
-- Home Assistant sendet Steuerbefehle über dieselbe MQTT-Verbindung zurück
-- Jede Licht-, Lüfter-, Outlet-, Alarm-, Grow-Plan-, Sensor- und Kalibrierungseinstellung fließt über diesen Pfad
+Nach diesem einmaligen Handshake ist die Bridge mit Bluetooth fertig — der Rest läuft über WLAN.
 
-MQTT ist immer aktiv. Es ist nicht abhängig von Bluetooth, dem Hotspot oder dem MITM-Proxy.
+**3. WLAN — Controller → ESP32-Hotspot → Home Assistant (alle Daten)**
 
-**Pfad 4 (optional) — Controller → ESP32-Hotspot → MITM-Proxy → Spider Farmer Cloud**
+Das ist der echte Datenpfad, und mit Bluetooth hat er nichts zu tun. Die Bridge betreibt **AP + STA
+gleichzeitig**: Sie ist ihr eigener WLAN-Access-Point (`SpiderBridge-…`) *und* normaler Client in
+deinem Heimnetz.
 
-Wenn du dich dafür entscheidest, dass der Controller sich mit dem Wi-Fi-Hotspot des ESP32 verbindet, kann der Bridge den TLS-Verkehr des Controllers optional über einen MITM-Proxy an die echte Spider Farmer Cloud weiterleiten (`mitm_proxy.c` + `wan_gate.c`). Dieser Pfad ist:
+```text
+   GGS-Controller ──WLAN──▶ ESP32-Hotspot ──DNS-Hijack──▶ TLS lokal beendet
+                                     │                              │
+                                     │                     MQTT-Pakete geparst
+                                     │                              │
+                              optionaler Cloud-Mirror       normalisiert + publiziert
+                                     │                              │
+                           Spider-Farmer-Cloud ──?──▶ HA-Broker ──▶ Home Assistant
+```
 
-- **Optional** — der Controller funktioniert auch perfekt ohne ihn
-- **Abschaltbar** — kann von drei Stellen aus komplett ausgeschaltet werden:
-  - Das Web-UI (`http://spiderbridge.local`)
-  - Home Assistant (`switch.internet_for_controllers`)
-  - MQTT-Befehl (`spiderfarmer/<device_id>/command/wan/set` → `OFF`)
-- **Wenn ausgeschaltet**: NAPT ist deaktiviert, sodass der Controller nicht ins Internet routen kann, und der Proxy beantwortet die MQTT-Pakete des Controllers lokal (CONNACK, SUBACK, PUBACK, PINGRESP), sodass er verbunden bleibt und weiterhin Status veröffentlicht — aber nichts verlässt dein Netzwerk
+Der Controller ist dafür gebaut, `sf.mqtt.spider-farmer.com:8883` anzusprechen. Der DNS-Proxy der
+Bridge beantwortet genau diesen einen Namen mit ihrer eigenen Adresse, damit der Controller seine
+MQTT-Verbindung **zur Bridge** aufbaut. Ab da:
 
-Dieser Pfad existiert, damit die Spider Farmer App den Controller weiterhin erreichen kann, wenn du das möchtest. Für Home Assistant ist er nicht erforderlich.
+1. **Beendet die Bridge die TLS-Sitzung des Controllers lokal**, mit dem
+   Spider-Farmer-Zertifikatsmaterial (`firmware/ggs/certs/`), sodass der Controller glaubt, er rede
+   mit dem Broker des Herstellers.
+2. **Seine MQTT-3.1.1-Pakete werden auf dem Draht geparst** — `CONNECT`, `PUBLISH`, `SUBSCRIBE`,
+   `PINGREQ` und der Rest.
+3. Das JSON in den Publishes (`getDevSta`, `getConfigField`, …) wird **normalisiert** und als
+   retainte Topics an *deinen* Broker veröffentlicht:
+   `spiderfarmer/<id>/state/temperature`, `spiderfarmer/<id>/state/fan`,
+   `spiderfarmer/<id>/state/plan`, … Jedes einzelne wird über **MQTT Discovery** angekündigt, damit
+   Home Assistant ohne jede YAML-Zeile ein natives Gerät daraus macht.
+4. **Befehle fahren denselben Weg zurück.** Ein Schalter in Home Assistant, und die Bridge empfängt
+   `spiderfarmer/<id>/command/<field>/set`, baut den **vollständigen** Modul-Block, den der
+   Controller erwartet — Teilblöcke verwirft er stillschweigend — und injiziert den passenden
+   `setConfigField`-Frame in genau dieselbe Sitzung. Der nächste Status-Frame des Controllers
+   bestätigt die Änderung, und die Entities aktualisieren sich.
+
+Dieser Pfad funktioniert sogar **ohne konfigurierten MQTT-Broker**: Die Bridge schickt die Befehle
+dann einfach durch die abgefangene Sitzung, und das Web-UI der Bridge bleibt die Bedienoberfläche.
+
+Ein Controller pro Bridge: Die Firmware unterstützt genau eine aktive Controller-Sitzung.
+
+**4. Cloud-Mirroring — optional und abschaltbar**
+
+Wenn du möchtest, dass die Spider-Farmer-App oder -Cloud den Controller weiter erreicht, kann die
+Bridge die Sitzung an den echten Broker weiterspiegeln. Es gibt zwei unabhängige Schalter, denn sie
+stoppen unterschiedliche Dinge:
+
+| Schalter | Was er steuert | Wo du ihn findest |
+|---|---|---|
+| **WAN-Gate** | NAT-Routing für Hotspot-Clients. Aus = der Controller kommt über die Bridge nicht hinaus. | Web-UI, `switch.internet_for_controllers`, `spiderfarmer/<id>/command/wan/set` |
+| **Cloud-Forward** | Ob die Bridge die Sitzung an die echte Spider-Farmer-Cloud weiterleitet. Aus = die Bridge antwortet dem Controller selbst. | Web-UI, Home Assistant |
+
+NAT allein abzuschalten macht das Setup **nicht** lokal — die eigene Verbindung der Bridge zur Cloud
+läuft über dein Heimnetz und umgeht NAT vollständig. Für ein wirklich offline betriebenes Setup
+müssen beide Schalter aus sein. Mit abgeschaltetem Cloud-Forward antwortet die Bridge dem Controller
+selbst (`CONNACK`, `SUBACK`, `PUBACK`, `PINGRESP`), sodass er verbunden bleibt, weiterhin Status
+veröffentlicht und nicht in eine Reconnect-Schleife fällt. Die Steuerung aus Home Assistant
+funktioniert in beiden Fällen — sie hat den Cloud-Weg nie benutzt.
 
 ### Warum SpiderBridge?
 
-Spider Farmer erzwingt für seinen GGS-Controller einen Cloud-Account, eine eigene App und schickt deine Grow-Daten durch fremde Server. **SpiderBridge dreht das um**: dein Controller spricht nur noch per Bluetooth mit einem ~10 € teuren ESP32, und Home Assistant sieht alles so, als wäre der Controller ein natives HA-Gerät.
+Spider Farmer erzwingt für seinen GGS-Controller einen Cloud-Account, eine eigene App und schickt deine Grow-Daten durch fremde Server. **SpiderBridge dreht das um**: Dein Controller redet nie wieder mit einem Spider-Farmer-Server — er spricht im eigenen WLAN mit einem ~10 € teuren ESP32, und Home Assistant sieht alles so, als wäre der Controller ein natives HA-Gerät.
 
 | 🔒 **100 % lokal** | 💸 **Unter 15 € Setup** | 🧠 **1:1 zur App** |
 |---|---|---|
-| Keine Spider-Farmer-Cloud, keine App, keine Account-Pflicht. Die Internet-Verbindung des Controllers lässt sich komplett ausschalten. | Ein ESP32 (WROOM-32, 4 MB Flash) reicht. Kein Raspberry Pi, kein Docker, kein Kabel-Salat. | **183 HA-Entities** (153 pro Controller + 30 Bridge-Diagnose) — jede Licht-, Lüfter-, Outlet-, Alarm- und Plan-Einstellung der App ist abgedeckt. |
-| Controller ↔ Bridge per verschlüsseltem Bluetooth LE. Home Assistant ↔ Bridge per MQTT im LAN. | Flash via USB-Datenkabel, einstecken, fertig. Kein Löten, kein Terminal, keine Toolchain. | Tag/Nacht-Ziele, 13 Alarmtypen, Grow-Pläne mit Templates, Sensor-Kalibrierung, Bluetooth-Pairing — komplett. |
+| Keine Spider-Farmer-Cloud, keine App, keine Account-Pflicht. Die Internet-Verbindung des Controllers lässt sich komplett ausschalten — zwei Schalter, beide aus, und nichts verlässt dein Netzwerk. | Ein ESP32 (WROOM-32, 4 MB Flash) reicht. Kein Raspberry Pi, kein Docker, kein Kabel-Salat. | **183 HA-Entities** (153 pro Controller + 30 Bridge-Diagnose) — jede Licht-, Lüfter-, Outlet-, Alarm- und Plan-Einstellung der App ist abgedeckt. |
+| Einrichtung über das **USB-Kabel** mit Chrome oder Edge; Bluetooth wird genau einmal benutzt, um dem Controller sein WLAN zu geben. Home Assistant ↔ Bridge per MQTT im LAN. | Flash via USB-Datenkabel, einstecken, fertig. Kein Löten, kein Terminal, keine Toolchain. | Tag/Nacht-Ziele, 13 Alarmtypen, Grow-Pläne mit Templates, Sensor-Kalibrierung, einmalige Bluetooth-Provisionierung — komplett. |
 
 ### ⚡ Installation im Browser — kein Terminal, kein Löten
 
@@ -676,10 +831,10 @@ Spider Farmer erzwingt für seinen GGS-Controller einen Cloud-Account, eine eige
 
 1. 🌐 **Installer öffnen** → [matthias1232.github.io/spider-farmer-homeassistant/installer/](https://matthias1232.github.io/spider-farmer-homeassistant/installer/) (Chrome oder Edge, Desktop)
 2. 🔌 **Board anstecken** → per USB-Datenkabel, dann *Select board & start* klicken
-3. 📶 **WLAN eingeben** → Improv Serial schickt deine Heimnetz-Credentials direkt an den ESP32
-4. 🔗 **(Optional) Quick Connect** → koppelt deinen GGS-Controller per Bluetooth mit dem Bridge-Hotspot
+3. 📶 **WLAN eingeben** → esptool-js flasht die Firmware über USB, und Improv Wi-Fi Serial schickt deine Heimnetz-Credentials über dasselbe Kabel
+4. 🔗 **(Optional) Quick Connect** → die Bridge macht die Bluetooth-Arbeit danach selbst: Sie sucht deinen GGS-Controller und gibt ihm SSID und Passwort des Hotspots
 
-Das war's. Keine Kommandozeile, kein `idf.py`, keine YAML-Dateien. Der ESP32 holt sich die Firmware direkt aus dem Browser, tritt deinem WLAN bei und ist ab da über `http://spiderbridge.local` erreichbar.
+Das war's. Keine Kommandozeile, kein `idf.py`, keine YAML-Dateien. Der ESP32 holt sich die Firmware direkt aus deinem Browser über das USB-Kabel, tritt deinem WLAN bei und ist ab da unter **`http://192.168.10.1`** auf seinem eigenen `SpiderBridge`-Hotspot erreichbar — oder unter der Adresse, die er in deinem Heimnetz bekommen hat. Beides zeigt dir im Installer das Werkzeug *IP addresses & status*.
 
 > 💡 **Tipp:** Wenn der Flash mit *Failed to initialize* scheitert, halte die **BOOT**-Taste auf dem Board gedrückt, während du *Install* klickst, und lass sie los, sobald der Fortschrittsbalken startet.
 
@@ -735,7 +890,7 @@ Pullen am Stromkabel ist **nie** nötig. Mehrere unabhängige Schichten führen 
 ### ⭐ Wenn dir das Projekt hilft
 
 - Gib einen **Stern** ⭐ — hilft anderen, das Repo zu finden.
-- ☕ **[Donate via PayPal](https://www.paypal.com/paypalme/matthias1232)** — freiwillig, PayPal-me-Button in der Sidebar verlinkt auf dasselbe Konto.
+- ☕ **[Buy me a coffee](https://www.buymeacoffee.com/matthias1232)** — freiwillig, und derselbe Link, den die *About*-Seite der Firmware zeigt.
 - 📦 **[Supported ESP32 board (Amazon)](https://www.amazon.de/dp/B0DHRV7784?&linkCode=ll2&tag=matthias1232-20&linkId=c71aee711cb280677528abe8e058e53c&ref_=as_li_ss_tl)** — Affiliate-Link, ohne Mehrkosten für dich.
 
 </details>
