@@ -8,6 +8,11 @@
 #include "nav.h"
 #include "about_page.h"
 
+static const char ABOUT_HEAD[] =
+"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+"<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+"<title>About SpiderBridge</title><style>";
+
 static const char ABOUT_STYLE[] =
 "*{box-sizing:border-box}"
 "body{font-family:system-ui,sans-serif;max-width:42rem;margin:0 auto;"
@@ -29,7 +34,10 @@ static const char ABOUT_STYLE[] =
 ".gh{background:#24292f;color:#e6e6e6;border:1px solid #3c414d}"
 ".d{font-size:.85rem;color:#c3c8d0;line-height:1.5;margin:0 0 .6rem}";
 
-static const char ABOUT_OPEN[] = "</style></head><body>";
+// Split so the shared nav bar's CSS can be inserted while the <style>
+// block is still open, and its markup right after <body> — matching
+// every other page.
+static const char ABOUT_BODY_OPEN[] = "</style></head><body>";
 
 static const char ABOUT_BODY[] =
 "<h1>About SpiderBridge</h1>"
@@ -68,9 +76,10 @@ esp_err_t about_page_handler(httpd_req_t *req)
     if (!web_auth_check(req)) return ESP_OK;
 
     httpd_resp_set_type(req, "text/html; charset=utf-8");
+    httpd_resp_send_chunk(req, ABOUT_HEAD, HTTPD_RESP_USE_STRLEN);
     httpd_resp_send_chunk(req, ABOUT_STYLE, HTTPD_RESP_USE_STRLEN);
     httpd_resp_send_chunk(req, NAV_STYLE, HTTPD_RESP_USE_STRLEN);
-    httpd_resp_send_chunk(req, ABOUT_OPEN, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send_chunk(req, ABOUT_BODY_OPEN, HTTPD_RESP_USE_STRLEN);
     nav_send(req, NAV_ABOUT);
     httpd_resp_send_chunk(req, ABOUT_BODY, HTTPD_RESP_USE_STRLEN);
     return httpd_resp_send_chunk(req, NULL, 0);
